@@ -4,24 +4,20 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function Page() {
   const supabase = createServerSupabaseClient();
-  let info: any = null;
-
-  if ("payments" === "reports") {
-    const inv = await supabase.from("v_inventory_balance").select("*").limit(10);
-    const debt = await supabase.from("v_customer_debt").select("*").limit(10);
-    info = { inv, debt };
-  }
+  // NOTE: chưa dùng supabase ở page này, để sẵn cho bước build flow thu tiền
+  void supabase;
 
   return (
     <div>
-      <TopBar title="Thu tiền" subtitle="Ghi nhận thanh toán theo đơn/khách" />
+      <TopBar title="Thu tiền" subtitle="Ghi nhận thanh toán, theo dõi công nợ" />
       <Card>
-        <CardHeader><CardTitle>MVP</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>MVP</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-3 text-sm text-zinc-700">
-          <div>Trang này đã có route + layout. Mình sẽ build UI & flow chi tiết theo quy trình xưởng rang của bạn.</div>
-          False
-
-
+          <div>
+            Trang Thu tiền đã có route. Bước tiếp theo: form tạo payment + list payments + công nợ theo khách.
+          </div>
         </CardContent>
       </Card>
     </div>
