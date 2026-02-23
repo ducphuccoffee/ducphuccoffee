@@ -12,7 +12,7 @@ const emptyForm = {
   id: "",
   name: "",
   sku: "",
-  type: "raw" as const,
+  type: "raw" as Product["type"],
   unit: "kg",
   cost_price: 0,
   sell_price: 0,
