@@ -2,48 +2,47 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  });
+  const response = NextResponse.next();
 
+  // Create Supabase client (SSR version) with Next.js cookies API
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (name) => request.cookies.get(name)?.value,
-        set: (name, value, options) => response.cookies.set({ name, value, ...options }),
-        remove: (name, options) => response.cookies.set({ name, value: "", ...options }),
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookies) {
+          cookies.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
       },
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  // Paths that do NOT require auth
+  const publicPaths = ["/login", "/signup"];
   const pathname = request.nextUrl.pathname;
 
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isAppRoute =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/products") ||
-    pathname.startsWith("/customers") ||
-    pathname.startsWith("/orders") ||
-    pathname.startsWith("/batches") ||
-    pathname.startsWith("/payments") ||
-    pathname.startsWith("/reports");
+  // Allow public paths + api routes + static
+  if (
+    publicPaths.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon.ico")
+  ) {
+    return response;
+  }
 
-  if (!user && isAppRoute) {
+  const { data } = await supabase.auth.getUser();
+
+  // If not logged in => redirect login
+  if (!data?.user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
