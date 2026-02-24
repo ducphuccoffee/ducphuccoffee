@@ -12,7 +12,7 @@ export function AuthCard({ title, children, footer }: { title: string; children:
         {children}
         <div className="mt-4 text-sm text-zinc-600">{footer}</div>
         <div className="mt-6 text-xs text-zinc-500">
-          Tip: Nếu bạn chưa tạo schema DB, hãy chạy file SQL trong <code className="rounded bg-zinc-100 px-1">supabase/migrations/0001_init.sql</code> trên Supabase SQL Editor.
+          Tip: Nếu bạn chưa tạo schema DB, hãy mở file <code className="rounded bg-zinc-100 px-1">supabase-full-schema.sql</code> rồi dán toàn bộ vào Supabase SQL Editor (Run 1 lần).
         </div>
       </CardContent>
     </Card>

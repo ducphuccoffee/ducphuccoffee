@@ -2,19 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Package, Users, ShoppingCart, Flame, CreditCard, BarChart3, LogOut } from "lucide-react";
+import { LayoutGrid, Package, Users, ShoppingCart, Flame, CreditCard, BarChart3, MapPin, BadgePercent, Settings, Warehouse, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/Button";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/inventory-in", label: "Nhập nhân xanh", icon: Warehouse },
   { href: "/products", label: "Sản phẩm", icon: Package },
   { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/leads", label: "CRM / Leads", icon: Users },
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart },
-  { href: "/batches", label: "Batch rang", icon: Flame },
+  { href: "/batches", label: "Sản xuất", icon: Flame },
   { href: "/payments", label: "Thu tiền", icon: CreditCard },
+  { href: "/commissions", label: "Hoa hồng", icon: BadgePercent },
+  { href: "/checkins", label: "Check-in", icon: MapPin },
   { href: "/reports", label: "Báo cáo", icon: BarChart3 },
+  { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

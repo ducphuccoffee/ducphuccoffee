@@ -1,11 +1,35 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function POST(request: Request) {
-  const { email, password } = await request.json();
+function safeNextPath(v: unknown) {
+  const s = typeof v === "string" ? v : "";
+  // chặn open-redirect, chỉ cho path nội bộ
+  if (s.startsWith("/") && !s.startsWith("//")) return s;
+  return "/dashboard";
+}
 
-  // We return a response and attach auth cookies to it
-  const response = NextResponse.json({ ok: true });
+export async function POST(request: Request) {
+  // Hỗ trợ cả JSON và form submit
+  const ct = request.headers.get("content-type") || "";
+  let email = "";
+  let password = "";
+  let next = "/dashboard";
+
+  if (ct.includes("application/json")) {
+    const body = (await request.json()) as any;
+    email = body?.email || "";
+    password = body?.password || "";
+    next = safeNextPath(body?.next);
+  } else {
+    const fd = await request.formData();
+    email = String(fd.get("email") || "");
+    password = String(fd.get("password") || "");
+    next = safeNextPath(fd.get("next"));
+  }
+
+  // Response redirect (để browser không bị đứng ở /api/auth/login)
+  const url = new URL(next, request.url);
+  const response = NextResponse.redirect(url, { status: 303 });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,9 +38,7 @@ export async function POST(request: Request) {
       cookies: {
         get(name: string) {
           const cookie = request.headers.get("cookie") || "";
-          const match = cookie
-            .split("; ")
-            .find((c) => c.startsWith(name + "="));
+          const match = cookie.split("; ").find((c) => c.startsWith(name + "="));
           return match ? match.split("=").slice(1).join("=") : undefined;
         },
         set(name: string, value: string, options: any) {
@@ -30,8 +52,11 @@ export async function POST(request: Request) {
   );
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    // login fail => quay về /login và kèm lỗi
+    const back = new URL(`/login?err=${encodeURIComponent(error.message)}`, request.url);
+    return NextResponse.redirect(back, { status: 303 });
   }
 
   return response;

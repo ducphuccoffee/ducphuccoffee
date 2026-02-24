@@ -1,52 +1,38 @@
-# Roastery ERP Web (Supabase-first)
-Next.js 14 (App Router) + Tailwind + Supabase Auth + MVP pages for Roastery/CRM/ERP mini.
+# Roastery ERP Web (Supabase + Next.js + Vercel)
 
-## 1) Setup env
-Create `.env.local`:
+## 1) Tạo database (1 lần)
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_or_anon_key
-```
+Supabase Dashboard → **SQL Editor** → dán toàn bộ file `supabase-full-schema.sql` → Run.
 
-## 2) Create DB schema (one-time)
-Supabase Dashboard → SQL Editor → New Query → run:
+## 2) Chạy local
 
-`supabase/migrations/0001_init.sql`
-
-> This creates MVP tables and permissive RLS (authenticated can read/write). Tighten later.
-
-## 3) Run
 ```bash
 npm install
+cp .env.example .env.local
+```
+
+Điền:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Sau đó:
+
+```bash
 npm run dev
 ```
-Open http://localhost:3000
 
-## Deploy (Vercel)
-- Push to GitHub
-- Import repo in Vercel
-- Set env vars in Vercel:
-  - NEXT_PUBLIC_SUPABASE_URL
-  - NEXT_PUBLIC_SUPABASE_ANON_KEY
+## 3) Deploy Vercel
 
+Import repo GitHub → set Environment Variables giống `.env.local` → Deploy.
 
-## Auth note (important)
-This project uses cookie-based auth for middleware route protection.
-Login is implemented via `/api/auth/login` so the middleware can read the session.
-If you change auth flows, ensure cookies are set.
+---
 
+### Modules (MVP)
 
-## Step 2 (không lỗi): bật RLS + tạo dữ liệu mẫu
-1) Chạy SQL: `supabase/migrations/0002_rls_mvp.sql` trong Supabase SQL Editor.
-2) Vào web app -> Products/Customers -> bấm nút **Seed dữ liệu mẫu**.
-
-
-## Step 3: CRUD Products + Customers (UI)
-- Trang Sản phẩm/Khách hàng có nút Thêm/Sửa/Xoá.
-- API: `/api/products` và `/api/customers`.
-
-
-## Step 4: Tạo đơn hàng (MVP)
-- Vào Đơn hàng -> + Tạo đơn hàng -> chọn khách + thêm sản phẩm + nhập SL/giá.
-- Lưu sẽ tạo `orders` + `order_items` và tự tính total/cost/profit.
+- Nhập nhân xanh theo lô (`/inventory-in`)
+- CRM Leads pipeline (`/leads`)
+- Đơn hàng (MVP) (`/orders`)
+- Thu tiền (MVP) (`/payments`)
+- Hoa hồng (MVP) (`/commissions`)
+- Check-in GPS (SFA) (`/checkins`)
