@@ -2,93 +2,122 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const ORG_ID = "00000000-0000-0000-0000-000000000001" as const;
+type Role = "admin" | "manager" | "warehouse" | "sales" | "collaborator";
 
 type CreateUserBody = {
-  email: string;
-  role: "admin" | "manager" | "warehouse" | "sales" | "collaborator";
+  email?: string;
+  role?: Role;
 };
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function jsonError(status: number, payload: Record<string, any>) {
+  return NextResponse.json(payload, { status });
+}
+
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as Partial<CreateUserBody>;
-    const email = (body.email ?? "").trim().toLowerCase();
+    // 0) Parse body
+    const body = (await req.json()) as CreateUserBody;
+    const safeEmail = (body.email ?? "").trim().toLowerCase();
     const role = body.role;
 
-    if (!email || !isValidEmail(email)) {
-      return NextResponse.json({ error: "Email không hợp lệ" }, { status: 400 });
+    if (!safeEmail || !isValidEmail(safeEmail)) {
+      return jsonError(400, { error: "Email không hợp lệ" });
     }
     if (!role || !["admin", "manager", "warehouse", "sales", "collaborator"].includes(role)) {
-      return NextResponse.json({ error: "Role không hợp lệ" }, { status: 400 });
+      return jsonError(400, { error: "Role không hợp lệ" });
     }
 
-    // 1) Check người gọi (session) + quyền admin/manager
+    // 1) Check session người gọi (phải login)
     const supabase = createServerSupabaseClient();
-    const { data: userRes, error: userErr } = await supabase.auth.getUser();
+    const { data: meRes, error: meErr } = await supabase.auth.getUser();
 
-    if (userErr || !userRes?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (meErr || !meRes?.user) {
+      return jsonError(401, { error: "Unauthorized" });
     }
+    const actorId = meRes.user.id;
 
-    const { data: member, error: memErr } = await supabase
+    // 2) Lấy org_id + role của actor từ org_members (vì bạn 1 công ty)
+    //    Nếu bạn đã seed admin đúng, query này sẽ ra 1 dòng.
+    const { data: actorMember, error: actorMemberErr } = await supabase
       .from("org_members")
-      .select("role, is_active")
-      .eq("org_id", ORG_ID)
-      .eq("user_id", userRes.user.id)
-      .single();
+      .select("org_id, role, is_active")
+      .eq("user_id", actorId)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
 
-    if (memErr || !member?.is_active) {
-      return NextResponse.json({ error: "Bạn chưa được cấp quyền vào công ty" }, { status: 403 });
-    }
-    if (!["admin", "manager"].includes(member.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actorMemberErr || !actorMember) {
+      return jsonError(403, { error: "Bạn chưa được cấp quyền vào công ty" });
     }
 
-    // 2) Admin client (service role) để tạo user
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!["admin", "manager"].includes(actorMember.role)) {
+      return jsonError(403, { error: "Forbidden" });
+    }
+
+    const orgId = actorMember.org_id as string;
+
+    // 3) Service role admin client (server-only) để invite user
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!serviceKey || !url) {
-      return NextResponse.json(
-        { error: "Missing SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL" },
-        { status: 500 }
-      );
+    if (!url || !serviceKey) {
+      return jsonError(500, {
+        error: "Missing env",
+        missing: {
+          NEXT_PUBLIC_SUPABASE_URL: !url,
+          SUPABASE_SERVICE_ROLE_KEY: !serviceKey,
+        },
+      });
     }
 
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-    // Invite user (gửi email)
-    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email);
+    // 4) Invite user (Supabase sẽ gửi email invite)
+    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(safeEmail);
+
     if (inviteErr) {
-      return NextResponse.json({ error: inviteErr.message }, { status: 400 });
+      return jsonError(400, {
+        error: inviteErr.message,
+        code: (inviteErr as any).code,
+        status: (inviteErr as any).status,
+      });
     }
 
     const newUserId = invited.user?.id;
     if (!newUserId) {
-      return NextResponse.json({ error: "Invite failed" }, { status: 400 });
+      return jsonError(400, { error: "Invite failed (no user id returned)" });
     }
 
-    // 3) Gán role vào org_members
-    const { error: upsertErr } = await admin.from("org_members").upsert(
-      {
-        org_id: ORG_ID,
-        user_id: newUserId,
-        role,
-        is_active: true,
-      },
-      { onConflict: "org_id,user_id" }
-    );
+    // 5) Upsert org_members (gán role)
+    //    Điều kiện: DB phải có UNIQUE/PK cho (org_id, user_id) để onConflict hoạt động.
+    const { data: upserted, error: upsertErr } = await admin
+      .from("org_members")
+      .upsert(
+        { org_id: orgId, user_id: newUserId, role, is_active: true },
+        { onConflict: "org_id,user_id" }
+      )
+      .select("org_id,user_id,role,is_active")
+      .single();
 
     if (upsertErr) {
-      return NextResponse.json({ error: upsertErr.message }, { status: 400 });
+      return jsonError(400, {
+        error: upsertErr.message,
+        code: (upsertErr as any).code,
+        details: (upsertErr as any).details,
+        hint: (upsertErr as any).hint,
+      });
     }
 
-    return NextResponse.json({ ok: true, user_id: newUserId, email, role });
+    return NextResponse.json({
+      ok: true,
+      invited: { user_id: newUserId, email: safeEmail },
+      member: upserted,
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+    return jsonError(500, { error: e?.message ?? "Unknown error" });
   }
 }
