@@ -1,3 +1,4 @@
+<h1 style={{ color: "red" }}>TEST INVENTORY PAGE</h1>
 import { TopBar } from "@/components/TopBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
