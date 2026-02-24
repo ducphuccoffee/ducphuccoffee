@@ -10,6 +10,9 @@ export async function GET() {
     .eq("type", "green")
     .order("name");
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
   return NextResponse.json({ data });
 }
