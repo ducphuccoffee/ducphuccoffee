@@ -35,6 +35,35 @@ export type GreenInbound = {
   created_at: string;
 };
 
+export type Supplier = {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type Item = {
+  id: string;
+  name: string;
+  sku: string | null;
+  type: "green" | "origin" | "blend" | "other" | string;
+  created_at?: string;
+};
+
+export type InventoryInHistoryRow = {
+  id: string; // purchase_item id
+  purchased_at: string;
+  lot_code: string;
+  supplier_name: string | null;
+  item_name: string;
+  qty_kg: number;
+  unit_price: number;
+  line_total: number;
+};
+
 export type RoastBatch = {
   id: string;
   roasted_at: string;

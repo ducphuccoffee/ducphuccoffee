@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
-import type { GreenInbound, GreenType } from "@/lib/types";
+import type { InventoryInHistoryRow, Item, Supplier } from "@/lib/types";
 
 function money(n: number) {
   return new Intl.NumberFormat("vi-VN").format(Number(n || 0));
@@ -23,67 +23,109 @@ function nowLocalInputValue() {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
-export function InventoryInClient({ initialTypes, initialInbounds }: { initialTypes: GreenType[]; initialInbounds: GreenInbound[] }) {
+export function InventoryInClient({
+  initialSuppliers,
+  initialGreenItems,
+  initialHistory,
+  error: initialError,
+}: {
+  initialSuppliers: Supplier[];
+  initialGreenItems: Item[];
+  initialHistory: InventoryInHistoryRow[];
+  error: string | null;
+}) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
 
-  const [types, setTypes] = useState<GreenType[]>(initialTypes);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [greenItems, setGreenItems] = useState<Item[]>(initialGreenItems);
 
   const [form, setForm] = useState({
-    inbound_at: nowLocalInputValue(),
+    purchased_at: nowLocalInputValue(),
     lot_code: "",
-    green_type_id: initialTypes?.[0]?.id || "",
+    supplier_id: initialSuppliers?.[0]?.id || "",
+    item_id: initialGreenItems?.[0]?.id || "",
     qty_kg: 0,
-    unit_cost: 0,
-    new_type_name: "",
+    unit_price: 0,
+    new_supplier_name: "",
+    new_supplier_phone: "",
+    new_item_name: "",
   });
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return initialInbounds;
-    return initialInbounds.filter((r) => {
+    if (!s) return initialHistory;
+    return initialHistory.filter((r) => {
       return (
         (r.lot_code || "").toLowerCase().includes(s) ||
-        (r.green_type_name || "").toLowerCase().includes(s)
+        (r.supplier_name || "").toLowerCase().includes(s) ||
+        (r.item_name || "").toLowerCase().includes(s)
       );
     });
-  }, [initialInbounds, q]);
+  }, [initialHistory, q]);
 
   function openCreate() {
     setError(null);
     setForm((f) => ({
       ...f,
-      inbound_at: nowLocalInputValue(),
+      purchased_at: nowLocalInputValue(),
       lot_code: "",
       qty_kg: 0,
-      unit_cost: 0,
-      new_type_name: "",
-      green_type_id: types?.[0]?.id || "",
+      unit_price: 0,
+      new_supplier_name: "",
+      new_supplier_phone: "",
+      new_item_name: "",
+      supplier_id: suppliers?.[0]?.id || "",
+      item_id: greenItems?.[0]?.id || "",
     }));
     setOpen(true);
   }
 
-  async function addType() {
-    const name = form.new_type_name.trim();
+  async function addSupplier() {
+    const name = form.new_supplier_name.trim();
+    const phone = form.new_supplier_phone.trim() || null;
     if (!name) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/green-types", {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Create supplier failed");
+      const created: Supplier = json.data;
+      setSuppliers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((f) => ({ ...f, supplier_id: created.id, new_supplier_name: "", new_supplier_phone: "" }));
+    } catch (e: any) {
+      setError(e.message || "Create type failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addGreenItem() {
+    const name = form.new_item_name.trim();
+    if (!name) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/items/green", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Create type failed");
-      const created: GreenType = json.data;
-      setTypes((prev) => [...prev, created]);
-      setForm((f) => ({ ...f, green_type_id: created.id, new_type_name: "" }));
+      if (!res.ok) throw new Error(json.error || "Create item failed");
+      const created: Item = json.data;
+      setGreenItems((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((f) => ({ ...f, item_id: created.id, new_item_name: "" }));
     } catch (e: any) {
-      setError(e.message || "Create type failed");
+      setError(e.message || "Create item failed");
     } finally {
       setSaving(false);
     }
@@ -94,19 +136,20 @@ export function InventoryInClient({ initialTypes, initialInbounds }: { initialTy
     setError(null);
     try {
       const payload = {
-        inbound_at: new Date(form.inbound_at).toISOString(),
+        purchased_at: new Date(form.purchased_at).toISOString(),
         lot_code: form.lot_code || null,
-        green_type_id: form.green_type_id,
+        supplier_id: form.supplier_id || null,
+        item_id: form.item_id,
         qty_kg: Number(form.qty_kg || 0),
-        unit_cost: Number(form.unit_cost || 0),
+        unit_price: Number(form.unit_price || 0),
       };
-      const res = await fetch("/api/green-inbounds", {
+      const res = await fetch("/api/inventory-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Save failed");
+      if (!res.ok) throw new Error(json.error || "Save failed");
       setOpen(false);
       router.refresh();
     } catch (e: any) {
@@ -131,7 +174,8 @@ export function InventoryInClient({ initialTypes, initialInbounds }: { initialTy
             <tr>
               <th className="px-4 py-3">Thời gian</th>
               <th className="px-4 py-3">Số lô</th>
-              <th className="px-4 py-3">Loại</th>
+              <th className="px-4 py-3">Nhà cung cấp</th>
+              <th className="px-4 py-3">Loại nhân</th>
               <th className="px-4 py-3">Kg</th>
               <th className="px-4 py-3">Đơn giá</th>
               <th className="px-4 py-3">Thành tiền</th>
@@ -140,17 +184,18 @@ export function InventoryInClient({ initialTypes, initialInbounds }: { initialTy
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t">
-                <td className="px-4 py-3 text-zinc-600">{new Date(r.inbound_at).toLocaleString("vi-VN")}</td>
+                <td className="px-4 py-3 text-zinc-600">{new Date(r.purchased_at).toLocaleString("vi-VN")}</td>
                 <td className="px-4 py-3 font-medium">{r.lot_code}</td>
-                <td className="px-4 py-3"><Badge>{r.green_type_name || "-"}</Badge></td>
+                <td className="px-4 py-3"><Badge>{r.supplier_name || "-"}</Badge></td>
+                <td className="px-4 py-3"><Badge>{r.item_name || "-"}</Badge></td>
                 <td className="px-4 py-3">{Number(r.qty_kg || 0).toFixed(2)}</td>
-                <td className="px-4 py-3">{money(Number(r.unit_cost || 0))}</td>
-                <td className="px-4 py-3">{money(Number(r.qty_kg || 0) * Number(r.unit_cost || 0))}</td>
+                <td className="px-4 py-3">{money(Number(r.unit_price || 0))}</td>
+                <td className="px-4 py-3">{money(Number(r.line_total || 0))}</td>
               </tr>
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">Chưa có phiếu nhập</td>
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">Chưa có phiếu nhập</td>
               </tr>
             ) : null}
           </tbody>
@@ -171,24 +216,40 @@ export function InventoryInClient({ initialTypes, initialInbounds }: { initialTy
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="text-xs font-medium text-zinc-600">Thời gian</label>
-            <Input type="datetime-local" value={form.inbound_at} onChange={(e) => setForm({ ...form, inbound_at: e.target.value })} />
+            <Input type="datetime-local" value={form.purchased_at} onChange={(e) => setForm({ ...form, purchased_at: e.target.value })} />
           </div>
           <div>
             <label className="text-xs font-medium text-zinc-600">Số lô (để trống tự tạo)</label>
             <Input value={form.lot_code} onChange={(e) => setForm({ ...form, lot_code: e.target.value })} placeholder="LOT-..." />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Cà phê nhân xanh</label>
+            <label className="text-xs font-medium text-zinc-600">Nhà cung cấp</label>
             <div className="mt-1 flex gap-2">
-              <select className="w-full rounded-xl border px-3 py-2 text-sm" value={form.green_type_id} onChange={(e) => setForm({ ...form, green_type_id: e.target.value })}>
-                {types.map((t) => (
+              <select className="w-full rounded-xl border px-3 py-2 text-sm" value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <Button variant="secondary" onClick={addSupplier} disabled={saving || !form.new_supplier_name.trim()}>+</Button>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Input value={form.new_supplier_name} onChange={(e) => setForm({ ...form, new_supplier_name: e.target.value })} placeholder="Thêm NCC... (nhập tên rồi bấm +)" />
+              <Input value={form.new_supplier_phone} onChange={(e) => setForm({ ...form, new_supplier_phone: e.target.value })} placeholder="SĐT (tuỳ chọn)" />
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-zinc-600">Loại cà phê nhân xanh</label>
+            <div className="mt-1 flex gap-2">
+              <select className="w-full rounded-xl border px-3 py-2 text-sm" value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}>
+                {greenItems.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <Button variant="secondary" onClick={addType} disabled={saving || !form.new_type_name.trim()}>+</Button>
+              <Button variant="secondary" onClick={addGreenItem} disabled={saving || !form.new_item_name.trim()}>+</Button>
             </div>
             <div className="mt-2">
-              <Input value={form.new_type_name} onChange={(e) => setForm({ ...form, new_type_name: e.target.value })} placeholder="Thêm loại mới... (nhập tên rồi bấm +)" />
+              <Input value={form.new_item_name} onChange={(e) => setForm({ ...form, new_item_name: e.target.value })} placeholder="Thêm loại nhân mới... (nhập tên rồi bấm +)" />
             </div>
           </div>
           <div>
@@ -197,7 +258,10 @@ export function InventoryInClient({ initialTypes, initialInbounds }: { initialTy
           </div>
           <div>
             <label className="text-xs font-medium text-zinc-600">Đơn giá (VND/kg)</label>
-            <Input type="number" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: Number(e.target.value) })} />
+            <Input type="number" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) })} />
+          </div>
+          <div className="sm:col-span-2 text-sm text-zinc-600">
+            Thành tiền: <span className="font-semibold">{money(Number(form.qty_kg || 0) * Number(form.unit_price || 0))} VND</span>
           </div>
         </div>
       </Modal>
