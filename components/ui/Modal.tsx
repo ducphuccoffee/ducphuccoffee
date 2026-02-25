@@ -19,17 +19,39 @@ export function Modal({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    if (open) {
+      window.addEventListener("keydown", onKey);
+      document.body.style.overflow = "hidden"; // khóa scroll nền
+    }
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
   }, [open, onClose]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
+      {/* overlay */}
+      <div
+        className="absolute inset-0 bg-black/30 md:bg-black/30"
+        onClick={onClose}
+      />
+
+      {/* panel */}
+      <div
+        className="
+          absolute inset-0 bg-white
+          md:inset-auto md:left-1/2 md:top-1/2
+          md:w-[min(640px,calc(100vw-32px))]
+          md:-translate-x-1/2 md:-translate-y-1/2
+          md:rounded-2xl md:shadow-xl
+          flex flex-col
+        "
+      >
+        {/* header */}
+        <div className="flex items-center justify-between border-b px-4 py-3 md:px-5 md:py-4">
           <div className="text-base font-semibold">{title}</div>
           <button
             onClick={onClose}
@@ -39,8 +61,18 @@ export function Modal({
             ✕
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
-        {footer ? <div className="border-t px-5 py-4">{footer}</div> : null}
+
+        {/* body (scrollable on mobile) */}
+        <div className="flex-1 overflow-auto px-4 py-4 md:px-5 md:py-4">
+          {children}
+        </div>
+
+        {/* footer */}
+        {footer ? (
+          <div className="border-t px-4 py-3 md:px-5 md:py-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
