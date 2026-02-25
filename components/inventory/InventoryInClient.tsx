@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Badge } from "@/components/ui/Badge";
 import type { InventoryInHistoryRow, Item, Supplier } from "@/lib/types";
 
 function money(n: number) {
@@ -35,6 +34,7 @@ export function InventoryInClient({
   error: string | null;
 }) {
   const router = useRouter();
+
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,6 +43,13 @@ export function InventoryInClient({
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [greenItems, setGreenItems] = useState<Item[]>(initialGreenItems);
 
+  // MODAL con: thêm NCC / thêm loại nhân
+  const [openAddSupplier, setOpenAddSupplier] = useState(false);
+  const [openAddItem, setOpenAddItem] = useState(false);
+
+  const [newSupplier, setNewSupplier] = useState({ name: "", phone: "" });
+  const [newItem, setNewItem] = useState({ name: "" }); // API hiện tại chỉ cần name
+
   const [form, setForm] = useState({
     purchased_at: nowLocalInputValue(),
     lot_code: "",
@@ -50,9 +57,6 @@ export function InventoryInClient({
     item_id: initialGreenItems?.[0]?.id || "",
     qty_kg: 0,
     unit_price: 0,
-    new_supplier_name: "",
-    new_supplier_phone: "",
-    new_item_name: "",
   });
 
   const rows = useMemo(() => {
@@ -69,27 +73,27 @@ export function InventoryInClient({
 
   function openCreate() {
     setError(null);
-    setForm((f) => ({
-      ...f,
+    setForm({
       purchased_at: nowLocalInputValue(),
       lot_code: "",
-      qty_kg: 0,
-      unit_price: 0,
-      new_supplier_name: "",
-      new_supplier_phone: "",
-      new_item_name: "",
       supplier_id: suppliers?.[0]?.id || "",
       item_id: greenItems?.[0]?.id || "",
-    }));
+      qty_kg: 0,
+      unit_price: 0,
+    });
+    setNewSupplier({ name: "", phone: "" });
+    setNewItem({ name: "" });
     setOpen(true);
   }
 
   async function addSupplier() {
-    const name = form.new_supplier_name.trim();
-    const phone = form.new_supplier_phone.trim() || null;
+    const name = newSupplier.name.trim();
+    const phone = newSupplier.phone.trim() || null;
     if (!name) return;
+
     setSaving(true);
     setError(null);
+
     try {
       const res = await fetch("/api/suppliers", {
         method: "POST",
@@ -98,21 +102,30 @@ export function InventoryInClient({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Create supplier failed");
+
       const created: Supplier = json.data;
-      setSuppliers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-      setForm((f) => ({ ...f, supplier_id: created.id, new_supplier_name: "", new_supplier_phone: "" }));
+
+      setSuppliers((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setForm((f) => ({ ...f, supplier_id: created.id }));
+
+      setNewSupplier({ name: "", phone: "" });
+      setOpenAddSupplier(false);
     } catch (e: any) {
-      setError(e.message || "Create type failed");
+      setError(e.message || "Create supplier failed");
     } finally {
       setSaving(false);
     }
   }
 
   async function addGreenItem() {
-    const name = form.new_item_name.trim();
+    const name = newItem.name.trim();
     if (!name) return;
+
     setSaving(true);
     setError(null);
+
     try {
       const res = await fetch("/api/items/green", {
         method: "POST",
@@ -121,9 +134,16 @@ export function InventoryInClient({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Create item failed");
+
       const created: Item = json.data;
-      setGreenItems((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-      setForm((f) => ({ ...f, item_id: created.id, new_item_name: "" }));
+
+      setGreenItems((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setForm((f) => ({ ...f, item_id: created.id }));
+
+      setNewItem({ name: "" });
+      setOpenAddItem(false);
     } catch (e: any) {
       setError(e.message || "Create item failed");
     } finally {
@@ -134,6 +154,7 @@ export function InventoryInClient({
   async function save() {
     setSaving(true);
     setError(null);
+
     try {
       const payload = {
         purchased_at: new Date(form.purchased_at).toISOString(),
@@ -143,13 +164,16 @@ export function InventoryInClient({
         qty_kg: Number(form.qty_kg || 0),
         unit_price: Number(form.unit_price || 0),
       };
+
       const res = await fetch("/api/inventory-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
+
       setOpen(false);
       router.refresh();
     } catch (e: any) {
@@ -160,108 +184,238 @@ export function InventoryInClient({
   }
 
   return (
-    <div className="mt-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input placeholder="Tìm theo số lô hoặc loại..." value={q} onChange={(e) => setQ(e.target.value)} className="w-[min(420px,100%)]" />
-        <Button onClick={openCreate}>+ Nhập hàng</Button>
+    <div className="p-4">
+      <div className="flex items-center gap-2 justify-between">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Tìm theo số lô hoặc loại..."
+          className="w-[min(420px,100%)]"
+        />
+        <Button type="button" onClick={openCreate}>
+          + Nhập hàng
+        </Button>
       </div>
 
-      {error ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {error ? (
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-zinc-600">
-            <tr>
-              <th className="px-4 py-3">Thời gian</th>
-              <th className="px-4 py-3">Số lô</th>
-              <th className="px-4 py-3">Nhà cung cấp</th>
-              <th className="px-4 py-3">Loại nhân</th>
-              <th className="px-4 py-3">Kg</th>
-              <th className="px-4 py-3">Đơn giá</th>
-              <th className="px-4 py-3">Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="px-4 py-3 text-zinc-600">{new Date(r.purchased_at).toLocaleString("vi-VN")}</td>
-                <td className="px-4 py-3 font-medium">{r.lot_code}</td>
-                <td className="px-4 py-3"><Badge>{r.supplier_name || "-"}</Badge></td>
-                <td className="px-4 py-3"><Badge>{r.item_name || "-"}</Badge></td>
-                <td className="px-4 py-3">{Number(r.qty_kg || 0).toFixed(2)}</td>
-                <td className="px-4 py-3">{money(Number(r.unit_price || 0))}</td>
-                <td className="px-4 py-3">{money(Number(r.line_total || 0))}</td>
-              </tr>
-            ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">Chưa có phiếu nhập</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="mt-4 rounded-lg border bg-white overflow-hidden">
+        <div className="grid grid-cols-7 gap-2 px-3 py-2 text-xs font-semibold text-gray-600 border-b">
+          <div>Thời gian</div>
+          <div>Số lô</div>
+          <div>Nhà cung cấp</div>
+          <div>Loại nhân</div>
+          <div className="text-right">Kg</div>
+          <div className="text-right">Đơn giá</div>
+          <div className="text-right">Thành tiền</div>
+        </div>
+
+        {rows.map((r) => (
+          <div
+            key={`${r.purchase_id}-${r.line_id}`}
+            className="grid grid-cols-7 gap-2 px-3 py-2 text-sm border-b last:border-b-0"
+          >
+            <div className="text-gray-700">
+              {new Date(r.purchased_at).toLocaleString("vi-VN")}
+            </div>
+            <div className="font-mono text-xs">{r.lot_code}</div>
+            <div>{r.supplier_name || "-"}</div>
+            <div>{r.item_name || "-"}</div>
+            <div className="text-right">{Number(r.qty_kg || 0).toFixed(2)}</div>
+            <div className="text-right">{money(Number(r.unit_price || 0))}</div>
+            <div className="text-right">{money(Number(r.line_total || 0))}</div>
+          </div>
+        ))}
+
+        {rows.length === 0 ? (
+          <div className="p-4 text-sm text-gray-500">Chưa có phiếu nhập</div>
+        ) : null}
       </div>
 
+      {/* Modal chính: Nhập hàng */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
         title="Nhập hàng nhân xanh"
         footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Huỷ</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "Đang lưu..." : "Lưu"}</Button>
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={() => setOpen(false)} disabled={saving}>
+              Huỷ
+            </Button>
+            <Button type="button" onClick={save} disabled={saving}>
+              {saving ? "Đang lưu..." : "Lưu"}
+            </Button>
           </div>
         }
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           <div>
-            <label className="text-xs font-medium text-zinc-600">Thời gian</label>
-            <Input type="datetime-local" value={form.purchased_at} onChange={(e) => setForm({ ...form, purchased_at: e.target.value })} />
+            <div className="text-sm mb-1">Thời gian</div>
+            <Input
+              type="datetime-local"
+              value={form.purchased_at}
+              onChange={(e) => setForm({ ...form, purchased_at: e.target.value })}
+            />
           </div>
+
           <div>
-            <label className="text-xs font-medium text-zinc-600">Số lô (để trống tự tạo)</label>
-            <Input value={form.lot_code} onChange={(e) => setForm({ ...form, lot_code: e.target.value })} placeholder="LOT-..." />
+            <div className="text-sm mb-1">Số lô (để trống tự tạo)</div>
+            <Input
+              value={form.lot_code}
+              onChange={(e) => setForm({ ...form, lot_code: e.target.value })}
+              placeholder="LOT-..."
+            />
           </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Nhà cung cấp</label>
-            <div className="mt-1 flex gap-2">
-              <select className="w-full rounded-xl border px-3 py-2 text-sm" value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
+
+          <div>
+            <div className="text-sm mb-1">Nhà cung cấp</div>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-10 w-full rounded-md border px-3"
+                value={form.supplier_id}
+                onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}
+              >
                 {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
-              <Button variant="secondary" onClick={addSupplier} disabled={saving || !form.new_supplier_name.trim()}>+</Button>
-            </div>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Input value={form.new_supplier_name} onChange={(e) => setForm({ ...form, new_supplier_name: e.target.value })} placeholder="Thêm NCC... (nhập tên rồi bấm +)" />
-              <Input value={form.new_supplier_phone} onChange={(e) => setForm({ ...form, new_supplier_phone: e.target.value })} placeholder="SĐT (tuỳ chọn)" />
+              <Button type="button" onClick={() => setOpenAddSupplier(true)}>
+                + NCC
+              </Button>
             </div>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Loại cà phê nhân xanh</label>
-            <div className="mt-1 flex gap-2">
-              <select className="w-full rounded-xl border px-3 py-2 text-sm" value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}>
+          <div>
+            <div className="text-sm mb-1">Loại cà phê nhân xanh</div>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-10 w-full rounded-md border px-3"
+                value={form.item_id}
+                onChange={(e) => setForm({ ...form, item_id: e.target.value })}
+              >
                 {greenItems.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
-              <Button variant="secondary" onClick={addGreenItem} disabled={saving || !form.new_item_name.trim()}>+</Button>
+              <Button type="button" onClick={() => setOpenAddItem(true)}>
+                + Loại
+              </Button>
             </div>
-            <div className="mt-2">
-              <Input value={form.new_item_name} onChange={(e) => setForm({ ...form, new_item_name: e.target.value })} placeholder="Thêm loại nhân mới... (nhập tên rồi bấm +)" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-sm mb-1">Số kg</div>
+              <Input
+                type="number"
+                value={form.qty_kg}
+                onChange={(e) => setForm({ ...form, qty_kg: Number(e.target.value) })}
+              />
             </div>
+            <div>
+              <div className="text-sm mb-1">Đơn giá (VND/kg)</div>
+              <Input
+                type="number"
+                value={form.unit_price}
+                onChange={(e) =>
+                  setForm({ ...form, unit_price: Number(e.target.value) })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="text-sm">
+            Thành tiền:{" "}
+            <b>{money(Number(form.qty_kg || 0) * Number(form.unit_price || 0))}</b>{" "}
+            VND
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal con: Thêm NCC */}
+      <Modal
+        open={openAddSupplier}
+        onClose={() => setOpenAddSupplier(false)}
+        title="Thêm nhà cung cấp"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              onClick={() => setOpenAddSupplier(false)}
+              disabled={saving}
+            >
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              onClick={addSupplier}
+              disabled={saving || !newSupplier.name.trim()}
+            >
+              {saving ? "Đang lưu..." : "Lưu"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-3">
+          <div>
+            <div className="text-sm mb-1">Tên nhà cung cấp</div>
+            <Input
+              value={newSupplier.name}
+              onChange={(e) =>
+                setNewSupplier((s) => ({ ...s, name: e.target.value }))
+              }
+              placeholder="VD: Hoàng Thắng Coffee"
+            />
           </div>
           <div>
-            <label className="text-xs font-medium text-zinc-600">Số kg</label>
-            <Input type="number" value={form.qty_kg} onChange={(e) => setForm({ ...form, qty_kg: Number(e.target.value) })} />
+            <div className="text-sm mb-1">SĐT (tuỳ chọn)</div>
+            <Input
+              value={newSupplier.phone}
+              onChange={(e) =>
+                setNewSupplier((s) => ({ ...s, phone: e.target.value }))
+              }
+              placeholder="VD: 09xxxxxxx"
+            />
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal con: Thêm loại nhân */}
+      <Modal
+        open={openAddItem}
+        onClose={() => setOpenAddItem(false)}
+        title="Thêm loại nhân xanh"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={() => setOpenAddItem(false)} disabled={saving}>
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              onClick={addGreenItem}
+              disabled={saving || !newItem.name.trim()}
+            >
+              {saving ? "Đang lưu..." : "Lưu"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-3">
           <div>
-            <label className="text-xs font-medium text-zinc-600">Đơn giá (VND/kg)</label>
-            <Input type="number" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) })} />
-          </div>
-          <div className="sm:col-span-2 text-sm text-zinc-600">
-            Thành tiền: <span className="font-semibold">{money(Number(form.qty_kg || 0) * Number(form.unit_price || 0))} VND</span>
+            <div className="text-sm mb-1">Tên loại nhân</div>
+            <Input
+              value={newItem.name}
+              onChange={(e) => setNewItem({ name: e.target.value })}
+              placeholder="VD: Arabica S18"
+            />
           </div>
         </div>
       </Modal>

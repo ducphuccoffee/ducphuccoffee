@@ -13,7 +13,13 @@ export type Product = {
 export type Profile = {
   id: string;
   full_name: string | null;
-  role: "admin" | "roastery_manager" | "warehouse" | "sales" | "collaborator" | string;
+  role:
+    | "admin"
+    | "roastery_manager"
+    | "warehouse"
+    | "sales"
+    | "collaborator"
+    | string;
   can_view_profit: boolean;
   created_at: string;
 };
@@ -54,7 +60,8 @@ export type Item = {
 };
 
 export type InventoryInHistoryRow = {
-  id: string; // purchase_item id
+  purchase_id: string;   // purchases.id
+  line_id: string;       // purchase_lines.id (hoặc purchase_items.id)
   purchased_at: string;
   lot_code: string;
   supplier_name: string | null;
@@ -115,7 +122,6 @@ export type Customer = {
   credit_limit: number;
   created_at: string;
 };
-
 
 export type Order = {
   id: string;
