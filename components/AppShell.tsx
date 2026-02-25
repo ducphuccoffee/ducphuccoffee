@@ -1,157 +1,136 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import {
-  LayoutGrid,
-  Package,
-  Users,
-  ShoppingCart,
-  Flame,
-  CreditCard,
-  BarChart3,
-  MapPin,
-  BadgePercent,
-  Settings,
-  Warehouse,
-  LogOut,
-  X,
-  Menu,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { Button } from "@/components/ui/Button";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { href: "/inventory-in", label: "Nhập nhân xanh", icon: Warehouse },
-  { href: "/products", label: "Sản phẩm", icon: Package },
-  { href: "/customers", label: "Khách hàng", icon: Users },
-  { href: "/leads", label: "CRM / Leads", icon: Users },
-  { href: "/orders", label: "Đơn hàng", icon: ShoppingCart },
-  { href: "/batches", label: "Sản xuất", icon: Flame },
-  { href: "/payments", label: "Thu tiền", icon: CreditCard },
-  { href: "/commissions", label: "Hoa hồng", icon: BadgePercent },
-  { href: "/checkins", label: "Check-in", icon: MapPin },
-  { href: "/reports", label: "Báo cáo", icon: BarChart3 },
-  { href: "/settings", label: "Cài đặt", icon: Settings },
-];
+function NavLink({
+  href,
+  label,
+  active,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={[
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+        active ? "bg-black text-white" : "text-gray-700 hover:bg-gray-100",
+      ].join(" ")}
+    >
+      {label}
+    </Link>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const supabase = createBrowserSupabaseClient();
+  const [open, setOpen] = useState(false);
 
-  async function logout() {
-    // Server-side signOut to clear cookies used by middleware
-    await fetch("/api/auth/logout", { method: "POST" });
-    // Also clear local storage session (client)
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
+  // đóng drawer khi chuyển trang (mobile)
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
-  const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200">
-      <div className="mb-4">
-        <div className="text-sm font-semibold">Duc Phuc Coffee</div>
-        <div className="text-xs text-zinc-500">Roastery • CRM • ERP mini</div>
-      </div>
-
-      <nav className="space-y-1">
-        {nav.map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => onNavigate?.()}
-              className={cn(
-                "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                active ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"
-              )}
-            >
-              <Icon size={16} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-4">
-        <Button
-          variant="secondary"
-          className="w-full justify-center gap-2"
-          onClick={logout}
-        >
-          <LogOut size={16} />
-          Đăng xuất
-        </Button>
-      </div>
-    </div>
+  const nav = useMemo(
+    () => [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/inventory-in", label: "Nhập hàng nhanh" },
+      { href: "/products", label: "Sản phẩm" },
+      { href: "/customers", label: "Khách hàng" },
+      { href: "/leads", label: "CRM / Leads" },
+      { href: "/orders", label: "Đơn hàng" },
+      { href: "/batches", label: "Sản xuất" },
+      { href: "/payments", label: "Thu tiền" },
+      { href: "/commissions", label: "Hoa hồng" },
+      { href: "/checkins", label: "Check-in" },
+      { href: "/reports", label: "Báo cáo" },
+      { href: "/settings", label: "Cài đặt" },
+    ],
+    []
   );
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      {/* Mobile top bar */}
-      <div className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+    <div className="min-h-[100dvh] bg-gray-50">
+      {/* Top bar (mobile) */}
+      <div className="sticky top-0 z-40 border-b bg-white md:hidden">
+        <div className="flex items-center justify-between px-3 py-2">
           <button
             type="button"
-            onClick={() => setMobileOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+            className="rounded-lg border px-3 py-2 text-sm"
+            onClick={() => setOpen(true)}
+            aria-label="Mở menu"
           >
-            <Menu size={16} />
-            Menu
+            ☰
           </button>
-
           <div className="text-sm font-semibold">Duc Phuc Coffee</div>
-
-          <button
-            type="button"
-            onClick={logout}
-            className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="w-[44px]" /> {/* spacer */}
         </div>
       </div>
 
-      {/* Mobile drawer */}
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-40 md:hidden">
-          {/* overlay */}
+      <div className="mx-auto flex w-full max-w-6xl gap-4 px-3 py-3 md:px-6 md:py-6">
+        {/* Sidebar (desktop) */}
+        <aside className="hidden w-64 shrink-0 md:block">
+          <div className="rounded-2xl border bg-white p-3">
+            <div className="px-2 py-2 text-sm font-semibold">Duc Phuc Coffee</div>
+            <div className="mt-2 space-y-1">
+              {nav.map((n) => (
+                <NavLink
+                  key={n.href}
+                  href={n.href}
+                  label={n.label}
+                  active={pathname === n.href}
+                />
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        {/* Content */}
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
+
+      {/* Drawer (mobile) */}
+      {open ? (
+        <div className="fixed inset-0 z-50 md:hidden">
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => setOpen(false)}
           />
-          {/* panel */}
-          <div className="absolute left-0 top-0 h-full w-[86%] max-w-[340px] bg-zinc-50 p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="absolute left-0 top-0 h-full w-[84%] max-w-xs bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-3 py-3">
               <div className="text-sm font-semibold">Menu</div>
               <button
                 type="button"
-                className="rounded-xl border bg-white p-2"
-                onClick={() => setMobileOpen(false)}
+                className="rounded-lg border px-3 py-2 text-sm"
+                onClick={() => setOpen(false)}
               >
-                <X size={16} />
+                ✕
               </button>
             </div>
 
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
+            <div className="p-3">
+              <div className="space-y-1">
+                {nav.map((n) => (
+                  <NavLink
+                    key={n.href}
+                    href={n.href}
+                    label={n.label}
+                    active={pathname === n.href}
+                    onClick={() => setOpen(false)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
-
-      {/* Desktop layout */}
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 py-6">
-        <aside className="hidden w-64 shrink-0 md:block">
-          <Sidebar />
-        </aside>
-
-        <main className="flex-1">{children}</main>
-      </div>
     </div>
   );
 }
