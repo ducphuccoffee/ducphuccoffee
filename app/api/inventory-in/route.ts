@@ -63,6 +63,7 @@ export async function POST(req: Request) {
     line_total: qtyKg * unitPrice, // nullable, nhưng set luôn cho chắc
   });
 
-  if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 });
+    if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 });
 
   return NextResponse.json({ ok: true, purchase_id: purchase.id });
+}
