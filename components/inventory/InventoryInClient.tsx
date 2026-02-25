@@ -48,9 +48,9 @@ export function InventoryInClient({
   const [openAddItem, setOpenAddItem] = useState(false);
 
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "" });
-  const [newItem, setNewItem] = useState({ name: "" }); // API hiện tại chỉ cần name
+  const [newItem, setNewItem] = useState({ name: "" });
 
-  // qty_kg & unit_price dùng string để xoá trắng được (không bị "0" dính)
+  // qty_kg & unit_price dùng string để xoá trắng được
   const [form, setForm] = useState<{
     purchased_at: string;
     lot_code: string;
@@ -213,7 +213,56 @@ export function InventoryInClient({
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-lg border bg-white overflow-hidden">
+      {/* ✅ Mobile cards */}
+      <div className="mt-4 md:hidden space-y-2">
+        {rows.map((r) => (
+          <div
+            key={`${r.purchase_id}-${r.line_id}`}
+            className="rounded-xl border bg-white p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{r.item_name || "-"}</div>
+                <div className="mt-0.5 text-xs text-gray-600 truncate">
+                  {r.supplier_name || "-"}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-sm font-semibold">
+                  {Number(r.qty_kg || 0).toFixed(2)} kg
+                </div>
+                <div className="text-xs text-gray-600">
+                  {money(Number(r.unit_price || 0))}/kg
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-600">
+              <div className="truncate">
+                {new Date(r.purchased_at).toLocaleString("vi-VN")}
+              </div>
+              <div className="font-semibold text-gray-900">
+                {money(Number(r.line_total || 0))}
+              </div>
+            </div>
+
+            {r.lot_code ? (
+              <div className="mt-1 text-xs text-gray-600 font-mono truncate">
+                {r.lot_code}
+              </div>
+            ) : null}
+          </div>
+        ))}
+
+        {rows.length === 0 ? (
+          <div className="rounded-lg border bg-white p-4 text-sm text-gray-500">
+            Chưa có phiếu nhập
+          </div>
+        ) : null}
+      </div>
+
+      {/* ✅ Desktop table */}
+      <div className="mt-4 hidden md:block rounded-lg border bg-white overflow-hidden">
         <div className="grid grid-cols-7 gap-2 px-3 py-2 text-xs font-semibold text-gray-600 border-b">
           <div>Thời gian</div>
           <div>Số lô</div>
@@ -246,7 +295,7 @@ export function InventoryInClient({
         ) : null}
       </div>
 
-      {/* Modal chính: Nhập hàng */}
+      {/* Modal chính */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -337,11 +386,12 @@ export function InventoryInClient({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <div className="text-sm mb-1">Số kg</div>
               <Input
                 type="number"
+                inputMode="numeric"
                 value={form.qty_kg}
                 onChange={(e) => setForm({ ...form, qty_kg: e.target.value })}
                 placeholder="VD: 60"
@@ -351,6 +401,7 @@ export function InventoryInClient({
               <div className="text-sm mb-1">Đơn giá (VND/kg)</div>
               <Input
                 type="number"
+                inputMode="numeric"
                 value={form.unit_price}
                 onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
                 placeholder="VD: 105000"
@@ -371,11 +422,7 @@ export function InventoryInClient({
         title="Thêm nhà cung cấp"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              onClick={() => setOpenAddSupplier(false)}
-              disabled={saving}
-            >
+            <Button type="button" onClick={() => setOpenAddSupplier(false)} disabled={saving}>
               Huỷ
             </Button>
             <Button
@@ -393,9 +440,7 @@ export function InventoryInClient({
             <div className="text-sm mb-1">Tên nhà cung cấp</div>
             <Input
               value={newSupplier.name}
-              onChange={(e) =>
-                setNewSupplier((s) => ({ ...s, name: e.target.value }))
-              }
+              onChange={(e) => setNewSupplier((s) => ({ ...s, name: e.target.value }))}
               placeholder="VD: Hoàng Thắng Coffee"
             />
           </div>
@@ -403,9 +448,7 @@ export function InventoryInClient({
             <div className="text-sm mb-1">SĐT (tuỳ chọn)</div>
             <Input
               value={newSupplier.phone}
-              onChange={(e) =>
-                setNewSupplier((s) => ({ ...s, phone: e.target.value }))
-              }
+              onChange={(e) => setNewSupplier((s) => ({ ...s, phone: e.target.value }))}
               placeholder="VD: 09xxxxxxx"
             />
           </div>
@@ -419,11 +462,7 @@ export function InventoryInClient({
         title="Thêm loại nhân xanh"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              onClick={() => setOpenAddItem(false)}
-              disabled={saving}
-            >
+            <Button type="button" onClick={() => setOpenAddItem(false)} disabled={saving}>
               Huỷ
             </Button>
             <Button
