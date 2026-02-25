@@ -50,13 +50,21 @@ export function InventoryInClient({
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "" });
   const [newItem, setNewItem] = useState({ name: "" }); // API hiện tại chỉ cần name
 
-  const [form, setForm] = useState({
+  // qty_kg & unit_price dùng string để xoá trắng được (không bị "0" dính)
+  const [form, setForm] = useState<{
+    purchased_at: string;
+    lot_code: string;
+    supplier_id: string;
+    item_id: string;
+    qty_kg: string;
+    unit_price: string;
+  }>({
     purchased_at: nowLocalInputValue(),
     lot_code: "",
     supplier_id: initialSuppliers?.[0]?.id || "",
     item_id: initialGreenItems?.[0]?.id || "",
-    qty_kg: 0,
-    unit_price: 0,
+    qty_kg: "",
+    unit_price: "",
   });
 
   const rows = useMemo(() => {
@@ -78,8 +86,8 @@ export function InventoryInClient({
       lot_code: "",
       supplier_id: suppliers?.[0]?.id || "",
       item_id: greenItems?.[0]?.id || "",
-      qty_kg: 0,
-      unit_price: 0,
+      qty_kg: "",
+      unit_price: "",
     });
     setNewSupplier({ name: "", phone: "" });
     setNewItem({ name: "" });
@@ -183,6 +191,8 @@ export function InventoryInClient({
     }
   }
 
+  const total = Number(form.qty_kg || 0) * Number(form.unit_price || 0);
+
   return (
     <div className="p-4">
       <div className="flex items-center gap-2 justify-between">
@@ -285,8 +295,16 @@ export function InventoryInClient({
                   </option>
                 ))}
               </select>
-              <Button type="button" onClick={() => setOpenAddSupplier(true)}>
-                + NCC
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-3"
+                onClick={() => setOpenAddSupplier(true)}
+                aria-label="Thêm nhà cung cấp"
+                title="Thêm nhà cung cấp"
+              >
+                +
               </Button>
             </div>
           </div>
@@ -305,8 +323,16 @@ export function InventoryInClient({
                   </option>
                 ))}
               </select>
-              <Button type="button" onClick={() => setOpenAddItem(true)}>
-                + Loại
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-3"
+                onClick={() => setOpenAddItem(true)}
+                aria-label="Thêm loại nhân"
+                title="Thêm loại nhân"
+              >
+                +
               </Button>
             </div>
           </div>
@@ -317,7 +343,8 @@ export function InventoryInClient({
               <Input
                 type="number"
                 value={form.qty_kg}
-                onChange={(e) => setForm({ ...form, qty_kg: Number(e.target.value) })}
+                onChange={(e) => setForm({ ...form, qty_kg: e.target.value })}
+                placeholder="VD: 60"
               />
             </div>
             <div>
@@ -325,17 +352,14 @@ export function InventoryInClient({
               <Input
                 type="number"
                 value={form.unit_price}
-                onChange={(e) =>
-                  setForm({ ...form, unit_price: Number(e.target.value) })
-                }
+                onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
+                placeholder="VD: 105000"
               />
             </div>
           </div>
 
           <div className="text-sm">
-            Thành tiền:{" "}
-            <b>{money(Number(form.qty_kg || 0) * Number(form.unit_price || 0))}</b>{" "}
-            VND
+            Thành tiền: <b>{money(total)}</b> VND
           </div>
         </div>
       </Modal>
@@ -395,7 +419,11 @@ export function InventoryInClient({
         title="Thêm loại nhân xanh"
         footer={
           <div className="flex justify-end gap-2">
-            <Button type="button" onClick={() => setOpenAddItem(false)} disabled={saving}>
+            <Button
+              type="button"
+              onClick={() => setOpenAddItem(false)}
+              disabled={saving}
+            >
               Huỷ
             </Button>
             <Button
