@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { RoastBatch, GreenStock } from "@/lib/batch-types";
 
 const money = (n: number) =>
@@ -25,8 +26,13 @@ type Props = {
 };
 
 export function BatchesClient({ initialBatches, initialStock, error }: Props) {
+  const router = useRouter();
   const [batches, setBatches] = useState<RoastBatch[]>(initialBatches);
-  const [stock] = useState<GreenStock[]>(initialStock);
+  const [stock, setStock] = useState<GreenStock[]>(initialStock);
+
+  // Sync khi server refresh xong
+  useEffect(() => { setBatches(initialBatches); }, [initialBatches]);
+  useEffect(() => { setStock(initialStock); }, [initialStock]);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,9 +100,10 @@ export function BatchesClient({ initialBatches, initialStock, error }: Props) {
         setFormError(json.error ?? "Lỗi tạo batch");
         return;
       }
-      setBatches([json.data, ...batches]);
       setShowModal(false);
       setSelectedLot(""); setInputKg(""); setOutputKg(""); setNote("");
+      // Refetch toàn bộ data từ server (cập nhật stock FIFO + batches list)
+      router.refresh();
     } catch {
       setFormError("Lỗi kết nối");
     } finally {
