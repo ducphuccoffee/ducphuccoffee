@@ -30,29 +30,39 @@ const NAV_GROUPS = [
     ],
   },
   {
-    group: "BÁN HÀNG",
+    group: "NHẬP HÀNG",
     items: [
-      { href: "/orders",   label: "Đơn hàng",  icon: ShoppingCart },
-      { href: "/customers",label: "Khách hàng",icon: Users },
-      { href: "/leads",    label: "CRM / Leads",icon: UserCheck },
-      { href: "/payments", label: "Thu tiền",  icon: CreditCard },
+      { href: "/inventory-in", label: "Nhập nguyên liệu", icon: PackagePlus },
     ],
   },
   {
     group: "SẢN XUẤT",
     items: [
-      { href: "/batches",      label: "Sản xuất", icon: Factory },
-      { href: "/products",     label: "Sản phẩm", icon: Package },
-      { href: "/inventory-in", label: "Nhập hàng",icon: PackagePlus },
+      { href: "/batches", label: "Batch rang", icon: Factory },
+    ],
+  },
+  {
+    group: "SẢN PHẨM",
+    items: [
+      { href: "/products", label: "Danh mục SP", icon: Package },
+    ],
+  },
+  {
+    group: "BÁN HÀNG",
+    items: [
+      { href: "/orders",    label: "Đơn hàng",   icon: ShoppingCart },
+      { href: "/customers", label: "Khách hàng",  icon: Users },
+      { href: "/leads",    label: "CRM / Leads", icon: UserCheck },
+      { href: "/payments", label: "Thu tiền",    icon: CreditCard },
     ],
   },
   {
     group: "KHÁC",
     items: [
-      { href: "/commissions", label: "Hoa hồng",   icon: Award },
-      { href: "/checkins",    label: "Check-in",    icon: MapPin },
-      { href: "/reports",     label: "Báo cáo",     icon: BarChart2 },
-      { href: "/settings",    label: "Cài đặt",     icon: Settings },
+      { href: "/commissions", label: "Hoa hồng",  icon: Award },
+      { href: "/checkins",    label: "Check-in",  icon: MapPin },
+      { href: "/reports",     label: "Báo cáo",   icon: BarChart2 },
+      { href: "/settings",    label: "Cài đặt",   icon: Settings },
     ],
   },
 ];
