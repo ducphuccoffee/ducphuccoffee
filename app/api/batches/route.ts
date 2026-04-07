@@ -92,7 +92,7 @@ export async function POST(req: Request) {
       input_kg: body.input_kg,
       output_kg: body.output_kg,
       unit_cost_green: Number(lot.unit_cost),
-      notes: body.note ?? null,  // tên cũ là "notes" (không phải "note")
+      note: body.note ?? null,
       created_by: me?.user?.id ?? null,
     })
     .select()
