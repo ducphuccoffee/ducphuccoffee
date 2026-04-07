@@ -200,11 +200,11 @@ export function BatchesClient({ initialBatches, initialStock, error }: Props) {
                 <td className="px-4 py-3 text-right text-gray-700">{Number(b.input_kg).toFixed(1)} kg</td>
                 <td className="px-4 py-3 text-right text-gray-700">{Number(b.output_kg).toFixed(1)} kg</td>
                 <td className="px-4 py-3 text-right">
-                  <span className="text-orange-600 font-medium">{Number(b.loss_kg).toFixed(1)} kg</span>
-                  <span className="text-gray-400 text-xs ml-1">({Number(b.loss_pct).toFixed(1)}%)</span>
+                  <span className="text-orange-600 font-medium">{(Number(b.input_kg) - Number(b.output_kg)).toFixed(1)} kg</span>
+                  <span className="text-gray-400 text-xs ml-1">({(((Number(b.input_kg) - Number(b.output_kg)) / Number(b.input_kg)) * 100).toFixed(1)}%)</span>
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-gray-800">
-                  {money(Number(b.cost_per_kg))}
+                  {money(Number(b.output_kg) > 0 ? Math.round((Number(b.input_kg) * Number(b.unit_cost_green)) / Number(b.output_kg)) : 0)}
                 </td>
                 <td className="px-4 py-3 text-center">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[b.status] ?? "bg-gray-100 text-gray-600"}`}>
