@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+const ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 export async function GET() {
   const supabase = createServerSupabaseClient();
 
@@ -9,7 +11,7 @@ export async function GET() {
     supabase
       .from("roast_batches")
       .select("*")
-      .order("roast_date", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(200),
     supabase
       .from("v_green_stock")
@@ -62,8 +64,8 @@ export async function POST(req: Request) {
     }, { status: 400 });
 
   // Auto batch_code: BATCH-YYYYMMDD-NNN
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const prefix = `BATCH-${today}`;
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const prefix = `BATCH-${todayStr}`;
   const { count } = await supabase
     .from("roast_batches")
     .select("*", { count: "exact", head: true })
@@ -71,14 +73,17 @@ export async function POST(req: Request) {
   const seq = String((count ?? 0) + 1).padStart(3, "0");
   const batch_code = `${prefix}-${seq}`;
 
-  const ORG_ID = "00000000-0000-0000-0000-000000000001";
+  const now = new Date().toISOString();
 
+  // Insert với đúng tên cột của DB thực tế
   const { data, error } = await supabase
     .from("roast_batches")
     .insert({
       org_id: ORG_ID,
       batch_code,
-      roast_date: new Date().toISOString().slice(0, 10),
+      roasted_at: now,          // timestamptz NOT NULL
+      // Các cột mới từ ALTER TABLE (nếu chưa có thì DB bỏ qua)
+      roast_date: now.slice(0, 10),
       status: "completed",
       green_inbound_id: body.green_inbound_id,
       green_type_id: lot.green_type_id,
@@ -87,7 +92,7 @@ export async function POST(req: Request) {
       input_kg: body.input_kg,
       output_kg: body.output_kg,
       unit_cost_green: Number(lot.unit_cost),
-      note: body.note ?? null,
+      notes: body.note ?? null,  // tên cũ là "notes" (không phải "note")
       created_by: me?.user?.id ?? null,
     })
     .select()
