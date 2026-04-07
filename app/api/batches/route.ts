@@ -71,12 +71,15 @@ export async function POST(req: Request) {
   const seq = String((count ?? 0) + 1).padStart(3, "0");
   const batch_code = `${prefix}-${seq}`;
 
+  const ORG_ID = "00000000-0000-0000-0000-000000000001";
+
   const { data, error } = await supabase
     .from("roast_batches")
     .insert({
+      org_id: ORG_ID,
       batch_code,
       roast_date: new Date().toISOString().slice(0, 10),
-      status: "completed", // tạo là completed luôn
+      status: "completed",
       green_inbound_id: body.green_inbound_id,
       green_type_id: lot.green_type_id,
       green_type_name: lot.green_type_name,
