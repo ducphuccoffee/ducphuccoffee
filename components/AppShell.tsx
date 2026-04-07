@@ -3,134 +3,208 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  LayoutDashboard,
+  PackagePlus,
+  Package,
+  Users,
+  UserCheck,
+  ShoppingCart,
+  Factory,
+  CreditCard,
+  Award,
+  MapPin,
+  BarChart2,
+  Settings,
+  Coffee,
+  ChevronRight,
+  Menu,
+  X,
+} from "lucide-react";
 
-function NavLink({
-  href,
-  label,
-  active,
-  onClick,
-}: {
-  href: string;
-  label: string;
-  active: boolean;
-  onClick?: () => void;
-}) {
+const NAV_GROUPS = [
+  {
+    group: "TỔNG QUAN",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    group: "BÁN HÀNG",
+    items: [
+      { href: "/orders",   label: "Đơn hàng",  icon: ShoppingCart },
+      { href: "/customers",label: "Khách hàng",icon: Users },
+      { href: "/leads",    label: "CRM / Leads",icon: UserCheck },
+      { href: "/payments", label: "Thu tiền",  icon: CreditCard },
+    ],
+  },
+  {
+    group: "SẢN XUẤT",
+    items: [
+      { href: "/batches",      label: "Sản xuất", icon: Factory },
+      { href: "/products",     label: "Sản phẩm", icon: Package },
+      { href: "/inventory-in", label: "Nhập hàng",icon: PackagePlus },
+    ],
+  },
+  {
+    group: "KHÁC",
+    items: [
+      { href: "/commissions", label: "Hoa hồng",   icon: Award },
+      { href: "/checkins",    label: "Check-in",    icon: MapPin },
+      { href: "/reports",     label: "Báo cáo",     icon: BarChart2 },
+      { href: "/settings",    label: "Cài đặt",     icon: Settings },
+    ],
+  },
+];
+
+// ── Sidebar desktop ──────────────────────────────────────────────
+function SidebarContent({ pathname }: { pathname: string }) {
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={[
-        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
-        active ? "bg-black text-white" : "text-gray-700 hover:bg-gray-100",
-      ].join(" ")}
-    >
-      {label}
-    </Link>
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div
+        className="flex items-center gap-2.5 px-4 shrink-0"
+        style={{ height: 56, borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 shadow">
+          <Coffee className="h-4 w-4 text-white" />
+        </div>
+        <div className="overflow-hidden leading-snug">
+          <p className="text-white font-bold text-[13px] truncate">Đức Phúc Coffee</p>
+          <p className="text-slate-500 text-[10px] truncate">Quản lý vận hành</p>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-3">
+        {NAV_GROUPS.map(({ group, items }) => (
+          <div key={group}>
+            <p className="px-2 mb-1 text-[10px] font-bold tracking-widest text-slate-600 uppercase">
+              {group}
+            </p>
+            <ul className="space-y-0.5">
+              {items.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <li key={href}>
+                    <Link href={href}>
+                      <div
+                        className={[
+                          "flex items-center gap-2.5 px-3 py-[9px] rounded-md text-[13px] font-medium transition-all",
+                          active
+                            ? "bg-blue-600 text-white"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]",
+                        ].join(" ")}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 truncate">{label}</span>
+                        {active && (
+                          <ChevronRight className="h-3 w-3 text-white/50 shrink-0" />
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div
+        className="px-3 py-3 shrink-0"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-white/[0.06] cursor-pointer transition-colors">
+          <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+            ĐP
+          </div>
+          <div className="overflow-hidden leading-snug flex-1">
+            <p className="text-[12px] text-slate-300 font-semibold truncate">Huỳnh Tài</p>
+            <p className="text-[10px] text-slate-600 truncate">Quản trị viên</p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+// ── Main AppShell ────────────────────────────────────────────────
+export function AppShell({ children, topbar }: { children: React.ReactNode; topbar?: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // đóng drawer khi chuyển trang (mobile)
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
-  const nav = useMemo(
-    () => [
-      { href: "/dashboard", label: "Dashboard" },
-      { href: "/inventory-in", label: "Nhập hàng nhanh" },
-      { href: "/products", label: "Sản phẩm" },
-      { href: "/customers", label: "Khách hàng" },
-      { href: "/leads", label: "CRM / Leads" },
-      { href: "/orders", label: "Đơn hàng" },
-      { href: "/batches", label: "Sản xuất" },
-      { href: "/payments", label: "Thu tiền" },
-      { href: "/commissions", label: "Hoa hồng" },
-      { href: "/checkins", label: "Check-in" },
-      { href: "/reports", label: "Báo cáo" },
-      { href: "/settings", label: "Cài đặt" },
-    ],
-    []
-  );
-
   return (
-    <div className="min-h-[100dvh] bg-gray-50">
-      {/* Top bar (mobile) */}
-      <div className="sticky top-0 z-40 border-b bg-white md:hidden">
-        <div className="flex items-center justify-between px-3 py-2">
+    <>
+      {/* ── Desktop sidebar (fixed) ────── */}
+      <aside
+        className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40"
+        style={{ width: 220, background: "#101828" }}
+      >
+        <SidebarContent pathname={pathname} />
+      </aside>
+
+      {/* ── Main content area ──────────── */}
+      <div className="md:ml-[220px] min-h-screen bg-[#f0f2f5]">
+        {/* Sticky topbar (desktop only) */}
+        <div className="hidden md:block">{topbar}</div>
+
+        {/* Mobile topbar */}
+        <div
+          className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-gray-200 px-4"
+          style={{ height: 52 }}
+        >
           <button
             type="button"
-            className="rounded-lg border px-3 py-2 text-sm"
+            className="p-2 rounded-md text-gray-500 hover:bg-gray-100"
             onClick={() => setOpen(true)}
-            aria-label="Mở menu"
           >
-            ☰
+            <Menu className="h-5 w-5" />
           </button>
-          <div className="text-sm font-semibold">Duc Phuc Coffee</div>
-          <div className="w-[44px]" /> {/* spacer */}
+          <p className="text-[14px] font-bold text-gray-800">Đức Phúc Coffee</p>
+          <div className="w-9" />
+        </div>
+
+        {/* Page content */}
+        <div className="p-4 md:p-6">
+          {children}
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-6xl gap-4 px-3 py-3 md:px-6 md:py-6">
-        {/* Sidebar (desktop) */}
-        <aside className="hidden w-64 shrink-0 md:block">
-          <div className="rounded-2xl border bg-white p-3">
-            <div className="px-2 py-2 text-sm font-semibold">Duc Phuc Coffee</div>
-            <div className="mt-2 space-y-1">
-              {nav.map((n) => (
-                <NavLink
-                  key={n.href}
-                  href={n.href}
-                  label={n.label}
-                  active={pathname === n.href}
-                />
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        {/* Content */}
-        <main className="min-w-0 flex-1">{children}</main>
-      </div>
-
-      {/* Drawer (mobile) */}
-      {open ? (
+      {/* ── Mobile drawer ──────────────── */}
+      {open && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/50"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-[84%] max-w-xs bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-3 py-3">
-              <div className="text-sm font-semibold">Menu</div>
+          <div
+            className="absolute left-0 top-0 h-full flex flex-col"
+            style={{ width: 240, background: "#101828" }}
+          >
+            <div
+              className="flex items-center justify-end px-3 py-3 shrink-0"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+            >
               <button
                 type="button"
-                className="rounded-lg border px-3 py-2 text-sm"
+                className="p-2 rounded-md text-slate-400 hover:bg-white/10"
                 onClick={() => setOpen(false)}
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
-
-            <div className="p-3">
-              <div className="space-y-1">
-                {nav.map((n) => (
-                  <NavLink
-                    key={n.href}
-                    href={n.href}
-                    label={n.label}
-                    active={pathname === n.href}
-                    onClick={() => setOpen(false)}
-                  />
-                ))}
-              </div>
+            <div className="flex-1 overflow-y-auto">
+              <SidebarContent pathname={pathname} />
             </div>
           </div>
         </div>
-      ) : null}
-    </div>
+      )}
+    </>
   );
 }
