@@ -1,55 +1,79 @@
+// app/api/products/route.ts
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createRouteSupabase } from "@/lib/supabase/route";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const ProductSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  sku: z.string().min(1).optional().nullable(),
-  type: z.enum(["raw", "finished"]),
-  unit: z.string().min(1).optional().nullable(),
-  cost_price: z.coerce.number().min(0).default(0),
-  sell_price: z.coerce.number().min(0).default(0),
-  is_active: z.coerce.boolean().default(true),
-});
+export async function GET() {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(`
+      id, name, sku, kind, unit, weight_per_unit, price, note, is_active, created_at,
+      product_formulas (
+        id, green_type_id, ratio_pct,
+        green_types ( name )
+      )
+    `)
+    .order("created_at", { ascending: false })
+    .limit(200);
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const parsed = ProductSchema.omit({ id: true }).safeParse(body);
-  if (!parsed.success) return NextResponse.json({ ok: false, error: parsed.error.message }, { status: 400 });
-
-  const response = NextResponse.json({ ok: true });
-  const supabase = createRouteSupabase(request, response);
-
-  const { error, data } = await supabase.from("products").insert(parsed.data).select("*").single();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true, data });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ data: data ?? [] });
 }
 
-export async function PUT(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const parsed = ProductSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ ok: false, error: parsed.error.message }, { status: 400 });
-  if (!parsed.data.id) return NextResponse.json({ ok: false, error: "Missing id" }, { status: 400 });
+export async function POST(req: Request) {
+  const supabase = createServerSupabaseClient();
+  const body = await req.json();
 
-  const response = NextResponse.json({ ok: true });
-  const supabase = createRouteSupabase(request, response);
+  const { name, sku, kind, unit, weight_per_unit, price, note, formulas } = body;
 
-  const { id, ...patch } = parsed.data;
-  const { error, data } = await supabase.from("products").update(patch).eq("id", id).select("*").single();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true, data });
+  if (!name?.trim()) return NextResponse.json({ error: "Thiếu tên sản phẩm" }, { status: 400 });
+  if (!["original", "blend"].includes(kind)) return NextResponse.json({ error: "Loại không hợp lệ" }, { status: 400 });
+
+  // Validate blend formulas
+  if (kind === "blend") {
+    if (!formulas?.length) return NextResponse.json({ error: "Blend cần ít nhất 1 nguyên liệu" }, { status: 400 });
+    const total = formulas.reduce((s: number, f: any) => s + Number(f.ratio_pct), 0);
+    if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: `Tổng tỉ lệ phải = 100% (hiện: ${total}%)` }, { status: 400 });
+  }
+
+  // Insert product
+  const { data: product, error: productErr } = await supabase
+    .from("products")
+    .insert({
+      name: name.trim(),
+      sku: sku?.trim() || null,
+      kind,
+      unit: unit || "kg",
+      weight_per_unit: weight_per_unit ? Number(weight_per_unit) : null,
+      price: Number(price) || 0,
+      note: note?.trim() || null,
+    })
+    .select()
+    .single();
+
+  if (productErr) return NextResponse.json({ error: productErr.message }, { status: 400 });
+
+  // Insert formulas nếu blend
+  if (kind === "blend" && formulas?.length) {
+    const rows = formulas.map((f: any) => ({
+      product_id: product.id,
+      green_type_id: f.green_type_id,
+      ratio_pct: Number(f.ratio_pct),
+    }));
+    const { error: fErr } = await supabase.from("product_formulas").insert(rows);
+    if (fErr) return NextResponse.json({ error: fErr.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true, data: product });
 }
 
-export async function DELETE(request: Request) {
-  const url = new URL(request.url);
-  const id = url.searchParams.get("id");
-  if (!id) return NextResponse.json({ ok: false, error: "Missing id" }, { status: 400 });
-
-  const response = NextResponse.json({ ok: true });
-  const supabase = createRouteSupabase(request, response);
+export async function DELETE(req: Request) {
+  const supabase = createServerSupabaseClient();
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
 
   const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

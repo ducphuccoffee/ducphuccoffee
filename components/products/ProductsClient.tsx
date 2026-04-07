@@ -1,260 +1,466 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
-import type { Product } from "@/lib/types";
 
-const emptyForm = {
-  id: "",
-  name: "",
-  sku: "",
-  type: "raw" as Product["type"],
-  unit: "kg",
-  cost_price: 0,
-  sell_price: 0,
-  is_active: true,
+const money = (n: number) =>
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
+
+const KIND_LABEL: Record<string, string> = { original: "Nguyên chất", blend: "Blend" };
+const KIND_COLOR: Record<string, string> = {
+  original: "bg-green-100 text-green-700",
+  blend: "bg-purple-100 text-purple-700",
+};
+const UNIT_LABEL: Record<string, string> = { kg: "kg", goi: "Gói" };
+
+export type GreenType = { id: string; name: string };
+
+export type ProductFormula = {
+  id: string;
+  green_type_id: string;
+  ratio_pct: number;
+  green_types?: { name: string } | null;
 };
 
-function money(n: number) {
-  return new Intl.NumberFormat("vi-VN").format(Number(n || 0));
-}
+export type Product = {
+  id: string;
+  name: string;
+  sku: string | null;
+  kind: "original" | "blend";
+  unit: "kg" | "goi";
+  weight_per_unit: number | null;
+  price: number;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+  product_formulas?: ProductFormula[];
+};
 
-export function ProductsClient({ initial }: { initial: Product[] }) {
+type FormulaRow = { green_type_id: string; ratio_pct: string };
+
+const emptyForm = () => ({
+  name: "",
+  sku: "",
+  kind: "original" as "original" | "blend",
+  unit: "kg" as "kg" | "goi",
+  weight_per_unit: "",
+  price: "",
+  note: "",
+});
+
+type Props = { initialProducts: Product[]; greenTypes: GreenType[]; error?: string | null };
+
+export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
   const router = useRouter();
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<typeof emptyForm>(emptyForm);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const rows = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return initial;
-    return initial.filter((p) => (p.name || "").toLowerCase().includes(s) || (p.sku || "").toLowerCase().includes(s));
-  }, [initial, q]);
+  // Form
+  const [form, setForm] = useState(emptyForm());
+  const [formulas, setFormulas] = useState<FormulaRow[]>([{ green_type_id: "", ratio_pct: "" }]);
+
+  useEffect(() => { setProducts(initialProducts); }, [initialProducts]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return products;
+    const q = search.toLowerCase();
+    return products.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q)
+    );
+  }, [products, search]);
+
+  // Tổng tỉ lệ blend
+  const totalRatio = useMemo(
+    () => formulas.reduce((s, f) => s + (parseFloat(f.ratio_pct) || 0), 0),
+    [formulas]
+  );
 
   function openCreate() {
-    setError(null);
-    setForm(emptyForm);
-    setOpen(true);
+    setForm(emptyForm());
+    setFormulas([{ green_type_id: "", ratio_pct: "" }]);
+    setFormError(null);
+    setShowModal(true);
   }
 
-  function openEdit(p: Product) {
-    setError(null);
-    setForm({
-      id: p.id,
-      name: p.name || "",
-      sku: p.sku || "",
-      type: p.type,
-      unit: p.unit || "",
-      cost_price: Number(p.cost_price || 0),
-      sell_price: Number(p.sell_price || 0),
-      is_active: !!p.is_active,
-    });
-    setOpen(true);
+  function addFormulaRow() {
+    setFormulas([...formulas, { green_type_id: "", ratio_pct: "" }]);
   }
 
-  async function save() {
+  function removeFormulaRow(i: number) {
+    setFormulas(formulas.filter((_, idx) => idx !== i));
+  }
+
+  function updateFormula(i: number, field: keyof FormulaRow, val: string) {
+    const updated = [...formulas];
+    updated[i] = { ...updated[i], [field]: val };
+    setFormulas(updated);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+
+    if (!form.name.trim()) { setFormError("Vui lòng nhập tên sản phẩm"); return; }
+    if (form.kind === "blend") {
+      const validFormulas = formulas.filter(f => f.green_type_id && f.ratio_pct);
+      if (!validFormulas.length) { setFormError("Blend cần ít nhất 1 nguyên liệu"); return; }
+      if (Math.abs(totalRatio - 100) > 0.01) { setFormError(`Tổng tỉ lệ phải = 100% (hiện: ${totalRatio.toFixed(1)}%)`); return; }
+    }
+
     setSaving(true);
-    setError(null);
     try {
-      const payload: any = {
-        name: form.name,
-        sku: form.sku || null,
-        type: form.type,
-        unit: form.unit || null,
-        cost_price: Number(form.cost_price || 0),
-        sell_price: Number(form.sell_price || 0),
-        is_active: !!form.is_active,
+      const payload = {
+        name: form.name.trim(),
+        sku: form.sku.trim() || null,
+        kind: form.kind,
+        unit: form.unit,
+        weight_per_unit: form.weight_per_unit ? Number(form.weight_per_unit) : null,
+        price: Number(form.price) || 0,
+        note: form.note.trim() || null,
+        formulas: form.kind === "blend"
+          ? formulas.filter(f => f.green_type_id && f.ratio_pct).map(f => ({
+              green_type_id: f.green_type_id,
+              ratio_pct: parseFloat(f.ratio_pct),
+            }))
+          : [],
       };
 
       const res = await fetch("/api/products", {
-        method: form.id ? "PUT" : "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form.id ? { id: form.id, ...payload } : payload),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Save failed");
-      setOpen(false);
+      if (!res.ok || json.error) { setFormError(json.error ?? "Lỗi tạo sản phẩm"); return; }
+      setShowModal(false);
       router.refresh();
-    } catch (e: any) {
-      setError(e.message || "Save failed");
+    } catch {
+      setFormError("Lỗi kết nối");
     } finally {
       setSaving(false);
     }
   }
 
-  async function remove(id: string) {
+  async function handleDelete(id: string) {
     setSaving(true);
-    setError(null);
     try {
-      const res = await fetch(`/api/products?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Delete failed");
-      setConfirmId(null);
+      if (!res.ok || json.error) { alert(json.error ?? "Lỗi xoá"); return; }
+      setDeleteId(null);
       router.refresh();
-    } catch (e: any) {
-      setError(e.message || "Delete failed");
+    } catch {
+      alert("Lỗi kết nối");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="mt-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Input placeholder="Tìm theo tên hoặc SKU..." value={q} onChange={(e) => setQ(e.target.value)} className="w-[min(420px,100%)]" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={openCreate}>+ Thêm sản phẩm</Button>
-        </div>
+    <div className="p-6">
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">⚠️ {error}</div>
+      )}
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 mb-5">
+        <input
+          className="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Tìm tên, SKU..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex-1" />
+        <button
+          onClick={openCreate}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+        >
+          + Thêm sản phẩm
+        </button>
       </div>
 
-      {error ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-
-      <div className="mt-4 overflow-hidden rounded-2xl border">
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-zinc-600">
+          <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-4 py-3">Tên</th>
-              <th className="px-4 py-3">SKU</th>
-              <th className="px-4 py-3">Loại</th>
-              <th className="px-4 py-3">ĐVT</th>
-              <th className="px-4 py-3">Giá bán</th>
-              <th className="px-4 py-3">Giá vốn</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3 text-right">Hành động</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Tên sản phẩm</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">SKU</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">Loại</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Đơn vị</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Giá bán</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Công thức</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">Xoá</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} className="border-t">
-                <td className="px-4 py-3 font-medium">{p.name}</td>
-                <td className="px-4 py-3 text-zinc-600">{p.sku || "-"}</td>
-                <td className="px-4 py-3">
-                  <Badge>{p.type}</Badge>
+            {filtered.map((p) => (
+              <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50 transition">
+                <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs">{p.sku ?? "—"}</td>
+                <td className="px-4 py-3 text-center">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${KIND_COLOR[p.kind] ?? ""}`}>
+                    {KIND_LABEL[p.kind] ?? p.kind}
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-zinc-600">{p.unit || "-"}</td>
-                <td className="px-4 py-3">{money(Number(p.sell_price || 0))}</td>
-                <td className="px-4 py-3">{money(Number(p.cost_price || 0))}</td>
-                <td className="px-4 py-3">{p.is_active ? <Badge>active</Badge> : <Badge>inactive</Badge>}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="inline-flex items-center gap-2">
-                    <Button variant="secondary" onClick={() => openEdit(p)}>
-                      Sửa
-                    </Button>
-                    <Button variant="secondary" onClick={() => setConfirmId(p.id)}>
-                      Xoá
-                    </Button>
-                  </div>
+                <td className="px-4 py-3 text-gray-600">
+                  {UNIT_LABEL[p.unit] ?? p.unit}
+                  {p.unit === "goi" && p.weight_per_unit ? ` (${p.weight_per_unit}g)` : ""}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-800">{money(p.price)}</td>
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {p.kind === "original" ? (
+                    <span className="text-gray-400 italic">Nguyên chất</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(p.product_formulas ?? []).map((f) => (
+                        <span key={f.id} className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded text-xs">
+                          {f.green_types?.name ?? f.green_type_id} {f.ratio_pct}%
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={() => setDeleteId(p.id)}
+                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded hover:bg-red-50 transition"
+                  >
+                    Xoá
+                  </button>
                 </td>
               </tr>
             ))}
-            {rows.length === 0 ? (
+            {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
-                  Không có dữ liệu
+                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
+                  Chưa có sản phẩm nào
                 </td>
               </tr>
-            ) : null}
+            )}
           </tbody>
         </table>
       </div>
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={form.id ? "Sửa sản phẩm" : "Thêm sản phẩm"}
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
-              Huỷ
-            </Button>
-            <Button onClick={save} disabled={saving}>
-              {saving ? "Đang lưu..." : "Lưu"}
-            </Button>
-          </div>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Tên</label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ví dụ: Arabica Đà Lạt" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600">SKU</label>
-            <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="RAW-..." />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600">Loại</label>
-            <select
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as any })}
-            >
-              <option value="raw">raw (nguyên liệu)</option>
-              <option value="finished">finished (thành phẩm)</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600">ĐVT</label>
-            <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="kg / bag / box..." />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600">Giá vốn</label>
-            <Input
-              type="number"
-              value={form.cost_price}
-              onChange={(e) => setForm({ ...form, cost_price: Number(e.target.value) })}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600">Giá bán</label>
-            <Input
-              type="number"
-              value={form.sell_price}
-              onChange={(e) => setForm({ ...form, sell_price: Number(e.target.value) })}
-              placeholder="0"
-            />
-          </div>
-          <div className="sm:col-span-2 flex items-center gap-2">
-            <input
-              id="is_active"
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-            />
-            <label htmlFor="is_active" className="text-sm text-zinc-700">
-              Đang hoạt động
-            </label>
+      {/* Modal tạo sản phẩm */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800">Thêm sản phẩm mới</h2>
+            </div>
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              {/* Tên */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tên sản phẩm *</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="VD: Robusta S18 rang mộc, Blend Signature..."
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* SKU */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="VD: ROB-S18, BLEND-SIG"
+                  value={form.sku}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                />
+              </div>
+
+              {/* Loại */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Loại sản phẩm *</label>
+                <div className="flex gap-3">
+                  {(["original", "blend"] as const).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setForm({ ...form, kind: k })}
+                      className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${
+                        form.kind === k
+                          ? k === "original" ? "bg-green-600 text-white border-green-600" : "bg-purple-600 text-white border-purple-600"
+                          : "border-gray-200 text-gray-600 hover:border-gray-400"
+                      }`}
+                    >
+                      {KIND_LABEL[k]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Đơn vị */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị bán *</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.unit}
+                    onChange={(e) => setForm({ ...form, unit: e.target.value as "kg" | "goi" })}
+                  >
+                    <option value="kg">Kg</option>
+                    <option value="goi">Gói</option>
+                  </select>
+                </div>
+                {form.unit === "goi" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Trọng lượng/gói (gram)</label>
+                    <input
+                      type="number"
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="VD: 500"
+                      value={form.weight_per_unit}
+                      onChange={(e) => setForm({ ...form, weight_per_unit: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Giá bán */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giá bán (VNĐ)</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="VD: 250000"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                />
+              </div>
+
+              {/* Công thức Blend */}
+              {form.kind === "blend" && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Công thức blend
+                      <span className={`ml-2 text-xs ${Math.abs(totalRatio - 100) < 0.01 ? "text-green-600" : "text-orange-500"}`}>
+                        (Tổng: {totalRatio.toFixed(1)}%)
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addFormulaRow}
+                      className="text-blue-600 text-xs hover:underline"
+                    >
+                      + Thêm dòng
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {formulas.map((f, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <select
+                          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={f.green_type_id}
+                          onChange={(e) => updateFormula(i, "green_type_id", e.target.value)}
+                        >
+                          <option value="">-- Chọn loại nhân --</option>
+                          {greenTypes.map((gt) => (
+                            <option key={gt.id} value={gt.id}>{gt.name}</option>
+                          ))}
+                        </select>
+                        <div className="relative w-24">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-6"
+                            placeholder="60"
+                            value={f.ratio_pct}
+                            onChange={(e) => updateFormula(i, "ratio_pct", e.target.value)}
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+                        </div>
+                        {formulas.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeFormulaRow(i)}
+                            className="text-red-400 hover:text-red-600 text-lg leading-none"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ghi chú */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+                <textarea
+                  rows={2}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Mô tả sản phẩm..."
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                />
+              </div>
+
+              {formError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                  ⚠️ {formError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
+                  disabled={saving}
+                >
+                  Huỷ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition"
+                  disabled={saving}
+                >
+                  {saving ? "Đang lưu..." : "Tạo sản phẩm"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </Modal>
+      )}
 
-      <Modal
-        open={!!confirmId}
-        onClose={() => setConfirmId(null)}
-        title="Xoá sản phẩm?"
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirmId(null)} disabled={saving}>
-              Huỷ
-            </Button>
-            <Button onClick={() => confirmId && remove(confirmId)} disabled={saving}>
-              {saving ? "Đang xoá..." : "Xoá"}
-            </Button>
+      {/* Modal xác nhận xoá */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Xoá sản phẩm?</h3>
+            <p className="text-sm text-gray-500 mb-5">Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
+                disabled={saving}
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={() => handleDelete(deleteId)}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 rounded-lg transition"
+                disabled={saving}
+              >
+                {saving ? "Đang xoá..." : "Xoá"}
+              </button>
+            </div>
           </div>
-        }
-      >
-        <div className="text-sm text-zinc-700">Hành động này không thể hoàn tác.</div>
-      </Modal>
+        </div>
+      )}
     </div>
   );
 }
