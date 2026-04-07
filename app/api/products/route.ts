@@ -4,20 +4,28 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET() {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(`
-      id, name, sku, kind, unit, weight_per_unit, price, note, is_active, created_at,
-      product_formulas (
-        id, green_type_id, ratio_pct,
-        green_types ( name )
-      )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(200);
+
+  const [{ data: products, error }, { data: formulas }, { data: greenTypes }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, name, sku, kind, unit, weight_per_unit, price, note, is_active, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase.from("product_formulas").select("id, product_id, green_type_id, ratio_pct"),
+    supabase.from("green_types").select("id, name"),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ data: data ?? [] });
+
+  const gtMap = Object.fromEntries((greenTypes ?? []).map((g: any) => [g.id, g.name]));
+  const formulasByProduct: Record<string, any[]> = {};
+  for (const f of formulas ?? []) {
+    if (!formulasByProduct[f.product_id]) formulasByProduct[f.product_id] = [];
+    formulasByProduct[f.product_id].push({ ...f, green_types: { name: gtMap[f.green_type_id] ?? f.green_type_id } });
+  }
+  const data = (products ?? []).map((p: any) => ({ ...p, product_formulas: formulasByProduct[p.id] ?? [] }));
+
+  return NextResponse.json({ data });
 }
 
 export async function POST(req: Request) {
