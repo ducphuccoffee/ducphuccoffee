@@ -6,22 +6,25 @@ import { BatchesClient } from "@/components/batches/BatchesClient";
 export default async function BatchesPage() {
   const supabase = createServerSupabaseClient();
 
+  // Dùng column thực tế trong DB (bảng cũ dùng roasted_at, bảng mới có roast_date)
+  // Query tất cả columns để tránh lỗi nếu schema chưa đồng bộ hoàn toàn
   const [batchesRes, stockRes] = await Promise.all([
     supabase
       .from("roast_batches")
       .select("*")
-      .order("roast_date", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(200),
     supabase
       .from("v_green_stock")
       .select("*")
-      .gte("remaining_kg", 0)
       .order("inbound_at", { ascending: true }),
   ]);
 
   const batches = (batchesRes.data ?? []) as RoastBatch[];
   const stock = (stockRes.data ?? []) as GreenStock[];
-  const error = batchesRes.error?.message ?? stockRes.error?.message ?? null;
+
+  // Nếu v_green_stock lỗi (chưa có FK), trả stock rỗng thay vì crash
+  const error = batchesRes.error?.message ?? null;
 
   return (
     <div>
