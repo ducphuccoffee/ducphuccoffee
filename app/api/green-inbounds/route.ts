@@ -16,7 +16,7 @@ function genLotCode() {
 export async function GET(request: Request) {
   const response = NextResponse.json({ ok: true });
   const supabase = createRouteSupabase(request, response);
-  const { data, error } = await supabase.from("v_green_inbounds").select("*").order("inbound_at", { ascending: false }).limit(200);
+  const { data, error } = await supabase.from("v_green_stock").select("*").order("inbound_at", { ascending: false }).limit(200);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true, data });
 }
