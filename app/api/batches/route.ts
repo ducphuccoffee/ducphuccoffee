@@ -81,10 +81,10 @@ export async function POST(req: Request) {
     .insert({
       org_id: ORG_ID,
       batch_code,
-      roasted_at: now,          // timestamptz NOT NULL
-      // Các cột mới từ ALTER TABLE (nếu chưa có thì DB bỏ qua)
+      roasted_at: now,
       roast_date: now.slice(0, 10),
       status: "completed",
+      // green_item_id = FK cũ → items.id; để null sau khi ALTER DROP NOT NULL
       green_inbound_id: body.green_inbound_id,
       green_type_id: lot.green_type_id,
       green_type_name: lot.green_type_name,
