@@ -54,13 +54,12 @@ export async function POST(req: Request) {
 
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 400 });
 
-  // 4) tạo dòng nhập (purchase_lines) ✅ đúng bảng của bạn
+  // 4) tạo dòng nhập (purchase_lines) — KHÔNG insert line_total vì là generated column
   const { error: lineErr } = await supabase.from("purchase_lines").insert({
     purchase_id: purchase.id,
     item_id: itemId,
     qty_kg: qtyKg,
     unit_price: unitPrice,
-    line_total: qtyKg * unitPrice, // nullable, nhưng set luôn cho chắc
   });
 
     if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 });
