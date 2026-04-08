@@ -1,97 +1,91 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createRouteSupabase } from "@/lib/supabase/route";
-
-const ItemSchema = z.object({
-  product_id: z.string().uuid(),
-  qty: z.coerce.number().positive(),
-  sell_price: z.coerce.number().min(0).optional(),
-});
-
-const CreateOrderSchema = z.object({
-  customer_id: z.string().uuid().nullable().optional(),
-  status: z.string().optional().default("draft"),
-  items: z.array(ItemSchema).min(1),
-});
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function genCode() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `ORD-${stamp}-${rand}`;
+  return `DP-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
 }
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const parsed = CreateOrderSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: parsed.error.message }, { status: 400 });
-  }
+const STATUS_LABELS = ["pending","confirmed","delivered","cancelled"];
 
-  const response = NextResponse.json({ ok: true });
-  const supabase = createRouteSupabase(request, response);
+export async function GET() {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(`id, order_code, customer_name, customer_phone, status, note, total_amount, created_at,
+      order_items(id, product_id, product_name, unit, qty, unit_price, subtotal)`)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ data });
+}
 
-  // Fetch products for cost/sell defaults
-  const productIds = [...new Set(parsed.data.items.map((i) => i.product_id))];
-  const { data: products, error: pErr } = await supabase
-    .from("products")
-    .select("id, cost_price, sell_price, is_active, name")
-    .in("id", productIds);
+export async function POST(req: Request) {
+  const supabase = await createServerSupabaseClient();
+  const body = await req.json();
+  const { customer_name, customer_phone, note, items } = body;
+  if (!customer_name?.trim()) return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
+  if (!items?.length) return NextResponse.json({ error: "Đơn hàng cần ít nhất 1 sản phẩm" }, { status: 400 });
 
-  if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 400 });
+  const total = items.reduce((s: number, i: any) => s + Number(i.qty) * Number(i.unit_price), 0);
 
-  const map = new Map<string, any>();
-  (products || []).forEach((p) => map.set(p.id, p));
-
-  // Compute totals
-  let total = 0;
-  let cost = 0;
-
-  const items = parsed.data.items.map((i) => {
-    const p = map.get(i.product_id);
-    if (!p) throw new Error("Product not found: " + i.product_id);
-    const sell = typeof i.sell_price === "number" ? i.sell_price : Number(p.sell_price || 0);
-    const c = Number(p.cost_price || 0);
-    total += sell * i.qty;
-    cost += c * i.qty;
-    return {
-      product_id: i.product_id,
-      qty: i.qty,
-      sell_price: sell,
-      cost_price: c,
-    };
-  });
-
-  const order_code = genCode();
-  const profit = total - cost;
-
-  // Insert order
   const { data: order, error: oErr } = await supabase
     .from("orders")
     .insert({
-      order_code,
-      customer_id: parsed.data.customer_id ?? null,
+      order_code: genCode(),
+      customer_name: customer_name.trim(),
+      customer_phone: customer_phone?.trim() || null,
+      note: note?.trim() || null,
+      status: "pending",
       total_amount: total,
-      cost_amount: cost,
-      profit,
-      status: parsed.data.status ?? "draft",
     })
-    .select("*")
+    .select()
     .single();
+  if (oErr) return NextResponse.json({ error: oErr.message }, { status: 400 });
 
-  if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 400 });
-
-  // Insert items
-  const { error: iErr } = await supabase.from("order_items").insert(
-    items.map((it) => ({ ...it, order_id: order.id }))
-  );
-
+  const rows = items.map((i: any) => ({
+    order_id: order.id,
+    product_id: i.product_id,
+    product_name: i.product_name,
+    unit: i.unit || "kg",
+    qty: Number(i.qty),
+    unit_price: Number(i.unit_price),
+  }));
+  const { error: iErr } = await supabase.from("order_items").insert(rows);
   if (iErr) {
-    // rollback order (best-effort)
     await supabase.from("orders").delete().eq("id", order.id);
-    return NextResponse.json({ ok: false, error: iErr.message }, { status: 400 });
+    return NextResponse.json({ error: iErr.message }, { status: 400 });
   }
-
   return NextResponse.json({ ok: true, data: order });
+}
+
+export async function PATCH(req: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
+
+  const body = await req.json();
+  const patch: Record<string, any> = {};
+  if (body.status !== undefined) {
+    if (!STATUS_LABELS.includes(body.status)) return NextResponse.json({ error: "Trạng thái không hợp lệ" }, { status: 400 });
+    patch.status = body.status;
+  }
+  if (body.note !== undefined) patch.note = body.note;
+  if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Không có field hợp lệ" }, { status: 400 });
+
+  const { data, error } = await supabase.from("orders").update(patch).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true, data });
+}
+
+export async function DELETE(req: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
+  const { error } = await supabase.from("orders").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
 }
