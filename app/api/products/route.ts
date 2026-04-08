@@ -1,4 +1,3 @@
-// app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -23,7 +22,11 @@ export async function GET() {
     if (!formulasByProduct[f.product_id]) formulasByProduct[f.product_id] = [];
     formulasByProduct[f.product_id].push({ ...f, green_types: { name: gtMap[f.green_type_id] ?? f.green_type_id } });
   }
-  const data = (products ?? []).map((p: any) => ({ ...p, product_formulas: formulasByProduct[p.id] ?? [] }));
+  const data = (products ?? []).map((p: any) => ({
+    ...p,
+    green_type_name: p.green_type_id ? (gtMap[p.green_type_id] ?? null) : null,
+    product_formulas: formulasByProduct[p.id] ?? [],
+  }));
 
   return NextResponse.json({ data });
 }
@@ -37,14 +40,13 @@ export async function POST(req: Request) {
   if (!name?.trim()) return NextResponse.json({ error: "Thiếu tên sản phẩm" }, { status: 400 });
   if (!["original", "blend"].includes(kind)) return NextResponse.json({ error: "Loại không hợp lệ" }, { status: 400 });
 
-  // Validate blend formulas
   if (kind === "blend") {
     if (!formulas?.length) return NextResponse.json({ error: "Blend cần ít nhất 1 nguyên liệu" }, { status: 400 });
     const total = formulas.reduce((s: number, f: any) => s + Number(f.ratio_pct), 0);
-    if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: `Tổng tỉ lệ phải = 100% (hiện: ${total}%)` }, { status: 400 });
+    if (Math.abs(total - 100) > 0.01)
+      return NextResponse.json({ error: `Tổng tỉ lệ phải = 100% (hiện: ${total}%)` }, { status: 400 });
   }
 
-  // Insert product
   const { data: product, error: productErr } = await supabase
     .from("products")
     .insert({
@@ -55,7 +57,7 @@ export async function POST(req: Request) {
       weight_per_unit: weight_per_unit ? Number(weight_per_unit) : null,
       price: Number(price) || 0,
       note: note?.trim() || null,
-      green_type_id: green_type_id || null,
+      green_type_id: kind === "original" ? (green_type_id || null) : null,
       packaging_cost: Number(packaging_cost) || 0,
     })
     .select()
@@ -63,7 +65,6 @@ export async function POST(req: Request) {
 
   if (productErr) return NextResponse.json({ error: productErr.message }, { status: 400 });
 
-  // Insert formulas nếu blend
   if (kind === "blend" && formulas?.length) {
     const rows = formulas.map((f: any) => ({
       product_id: product.id,
@@ -89,19 +90,24 @@ export async function PATCH(req: Request) {
   const patch: Record<string, any> = {};
   for (const key of ALLOWED) {
     if (!(key in body)) continue;
-    if (key === "green_type_id") patch.green_type_id = body.green_type_id || null;
-    else if (key === "packaging_cost") {
+    if (key === "green_type_id") {
+      patch.green_type_id = body.green_type_id || null;
+    } else if (key === "packaging_cost") {
       const v = body.packaging_cost;
-      if (v === null || v === undefined || v === "") patch.packaging_cost = 0;
-      else {
+      if (v === null || v === undefined || v === "") {
+        patch.packaging_cost = 0;
+      } else {
         const n = Number(v);
-        if (isNaN(n)) return NextResponse.json({ error: "packaging_cost kh\u00f4ng h\u1ee3p l\u1ec7" }, { status: 400 });
+        if (isNaN(n)) return NextResponse.json({ error: "packaging_cost không hợp lệ" }, { status: 400 });
         patch.packaging_cost = n;
       }
+    } else {
+      patch[key] = body[key];
     }
-    else patch[key] = body[key];
   }
-  if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Không có field hợp lệ để update" }, { status: 400 });
+
+  if (Object.keys(patch).length === 0)
+    return NextResponse.json({ error: "Không có field hợp lệ để update" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("products")

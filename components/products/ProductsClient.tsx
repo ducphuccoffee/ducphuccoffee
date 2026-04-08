@@ -33,6 +33,9 @@ export type Product = {
   note: string | null;
   is_active: boolean;
   created_at: string;
+  green_type_id?: string | null;
+  green_type_name?: string | null;
+  packaging_cost?: number;
   product_formulas?: ProductFormula[];
 };
 
@@ -46,6 +49,8 @@ const emptyForm = () => ({
   weight_per_unit: "",
   price: "",
   note: "",
+  green_type_id: "",
+  packaging_cost: "",
 });
 
 type Props = { initialProducts: Product[]; greenTypes: GreenType[]; error?: string | null };
@@ -121,6 +126,8 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
         weight_per_unit: form.weight_per_unit ? Number(form.weight_per_unit) : null,
         price: Number(form.price) || 0,
         note: form.note.trim() || null,
+        green_type_id: form.kind === "original" ? (form.green_type_id || null) : null,
+        packaging_cost: Number(form.packaging_cost) || 0,
         formulas: form.kind === "blend"
           ? formulas.filter(f => f.green_type_id && f.ratio_pct).map(f => ({
               green_type_id: f.green_type_id,
@@ -214,7 +221,7 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
                 <td className="px-4 py-3 text-right font-semibold text-gray-800">{money(p.price)}</td>
                 <td className="px-4 py-3 text-xs text-gray-500">
                   {p.kind === "original" ? (
-                    <span className="text-gray-400 italic">Nguyên chất</span>
+                    <span className="text-gray-500 text-xs">{p.green_type_name ?? "Nguyên chất"}</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {(p.product_formulas ?? []).map((f) => (
@@ -298,6 +305,23 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
                 </div>
               </div>
 
+              {/* Loại nhân — chỉ khi original */}
+              {form.kind === "original" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Loại nhân</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.green_type_id}
+                    onChange={(e) => setForm({ ...form, green_type_id: e.target.value })}
+                  >
+                    <option value="">-- Chọn loại nhân --</option>
+                    {greenTypes.map((gt) => (
+                      <option key={gt.id} value={gt.id}>{gt.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Đơn vị */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -324,6 +348,21 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
                   </div>
                 )}
               </div>
+
+              {/* Chi phí bao bì — chỉ khi unit=goi */}
+              {form.unit === "goi" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Chi phí bao bì (VNĐ/gói)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="VD: 5000"
+                    value={form.packaging_cost}
+                    onChange={(e) => setForm({ ...form, packaging_cost: e.target.value })}
+                  />
+                </div>
+              )}
 
               {/* Giá bán */}
               <div>
