@@ -8,7 +8,7 @@ export async function GET() {
   const [{ data: products, error }, { data: formulas }, { data: greenTypes }] = await Promise.all([
     supabase
       .from("products")
-      .select("id, name, sku, kind, unit, weight_per_unit, price, note, is_active, created_at")
+      .select("id, name, sku, kind, unit, weight_per_unit, price, note, is_active, green_type_id, packaging_cost, created_at")
       .order("created_at", { ascending: false })
       .limit(200),
     supabase.from("product_formulas").select("id, product_id, green_type_id, ratio_pct"),
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const supabase = createServerSupabaseClient();
   const body = await req.json();
 
-  const { name, sku, kind, unit, weight_per_unit, price, note, formulas } = body;
+  const { name, sku, kind, unit, weight_per_unit, price, note, formulas, green_type_id, packaging_cost } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Thiếu tên sản phẩm" }, { status: 400 });
   if (!["original", "blend"].includes(kind)) return NextResponse.json({ error: "Loại không hợp lệ" }, { status: 400 });
@@ -55,6 +55,8 @@ export async function POST(req: Request) {
       weight_per_unit: weight_per_unit ? Number(weight_per_unit) : null,
       price: Number(price) || 0,
       note: note?.trim() || null,
+      green_type_id: green_type_id || null,
+      packaging_cost: Number(packaging_cost) || 0,
     })
     .select()
     .single();
