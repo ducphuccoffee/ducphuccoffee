@@ -84,11 +84,16 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
 
   const body = await req.json();
-  const { green_type_id, packaging_cost, ...rest } = body;
 
-  const patch: Record<string, any> = { ...rest };
-  if ("green_type_id" in body) patch.green_type_id = green_type_id || null;
-  if ("packaging_cost" in body) patch.packaging_cost = Number(packaging_cost) || 0;
+  const ALLOWED = ["name", "sku", "kind", "unit", "weight_per_unit", "price", "note", "is_active", "green_type_id", "packaging_cost"];
+  const patch: Record<string, any> = {};
+  for (const key of ALLOWED) {
+    if (!(key in body)) continue;
+    if (key === "green_type_id") patch.green_type_id = body.green_type_id || null;
+    else if (key === "packaging_cost") patch.packaging_cost = Number(body.packaging_cost) || 0;
+    else patch[key] = body[key];
+  }
+  if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Không có field hợp lệ để update" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("products")
