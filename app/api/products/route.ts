@@ -90,7 +90,15 @@ export async function PATCH(req: Request) {
   for (const key of ALLOWED) {
     if (!(key in body)) continue;
     if (key === "green_type_id") patch.green_type_id = body.green_type_id || null;
-    else if (key === "packaging_cost") patch.packaging_cost = Number(body.packaging_cost) || 0;
+    else if (key === "packaging_cost") {
+      const v = body.packaging_cost;
+      if (v === null || v === undefined || v === "") patch.packaging_cost = 0;
+      else {
+        const n = Number(v);
+        if (isNaN(n)) return NextResponse.json({ error: "packaging_cost kh\u00f4ng h\u1ee3p l\u1ec7" }, { status: 400 });
+        patch.packaging_cost = n;
+      }
+    }
     else patch[key] = body[key];
   }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Không có field hợp lệ để update" }, { status: 400 });
