@@ -77,6 +77,30 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, data: product });
 }
 
+export async function PATCH(req: Request) {
+  const supabase = createServerSupabaseClient();
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
+
+  const body = await req.json();
+  const { green_type_id, packaging_cost, ...rest } = body;
+
+  const patch: Record<string, any> = { ...rest };
+  if ("green_type_id" in body) patch.green_type_id = green_type_id || null;
+  if ("packaging_cost" in body) patch.packaging_cost = Number(packaging_cost) || 0;
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true, data });
+}
+
 export async function DELETE(req: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(req.url);
