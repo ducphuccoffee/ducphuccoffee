@@ -66,9 +66,9 @@ const emptyItem = (products: Product[]): ItemRow => ({
   unit_price: String(products[0]?.price || ""),
 });
 
-type Props = { initialOrders: Order[]; products: Product[] };
+type Props = { initialOrders: Order[]; products: Product[]; initialCustomers?: Customer[] };
 
-export function OrdersClient({ initialOrders, products }: Props) {
+export function OrdersClient({ initialOrders, products, initialCustomers = [] }: Props) {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [search, setSearch] = useState("");
