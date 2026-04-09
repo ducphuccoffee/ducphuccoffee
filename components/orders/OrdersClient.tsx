@@ -49,6 +49,13 @@ export type Product = {
   price: number;
 };
 
+export type Customer = {
+  id: string;
+  name: string;
+  phone?: string | null;
+  address?: string | null;
+};
+
 type ItemRow = { product_id: string; product_name: string; unit: string; qty: string; unit_price: string };
 
 const emptyItem = (products: Product[]): ItemRow => ({
