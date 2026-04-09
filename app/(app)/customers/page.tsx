@@ -1,54 +1,40 @@
-import { TopBar } from "@/components/TopBar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { DevSeedButton } from "@/components/DevSeedButton";
 import { CustomersClient } from "@/components/customers/CustomersClient";
-import type { Customer } from "@/lib/types";
 
 export default async function CustomersPage() {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
+  const supabase = await createServerSupabaseClient();
+
+  const { data: customers } = await supabase
     .from("customers")
-    .select("id,name,phone,email,address,credit_limit,created_at")
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .select("id, name, phone, address, created_at")
+    .order("name");
+
+  const { data: orderStats } = await supabase
+    .from("orders")
+    .select("customer_name, total_amount, status");
+
+  // build spend map
+  const spendMap: Record<string, number> = {};
+  const countMap: Record<string, number> = {};
+  for (const o of orderStats || []) {
+    if (!o.customer_name) continue;
+    spendMap[o.customer_name] = (spendMap[o.customer_name] || 0) + (Number(o.total_amount) || 0);
+    countMap[o.customer_name] = (countMap[o.customer_name] || 0) + 1;
+  }
+
+  const enriched = (customers || []).map((c: any) => ({
+    ...c,
+    total_spend: spendMap[c.name] || 0,
+    order_count: countMap[c.name] || 0,
+  }));
 
   return (
-    <div>
-      <TopBar title="Khách hàng" subtitle="CRM cơ bản + credit limit" />
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách khách hàng</CardTitle>
-          <p className="mt-1 text-sm text-zinc-600">MVP: hiển thị 50 khách hàng mới nhất</p>
-            <div className="mt-3"><DevSeedButton /></div>
-        </CardHeader>
-        <CardContent>
-          {error ? <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error.message}</div> : null}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-zinc-500">
-                <tr>
-                  <th className="py-2 pr-3">Tên</th>
-                  <th className="py-2 pr-3">Điện thoại</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Credit limit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {(data ?? []).map((c: any) => (
-                  <tr key={c.id} className="hover:bg-zinc-50">
-                    <td className="py-2 pr-3 font-medium">{c.name}</td>
-                    <td className="py-2 pr-3 text-zinc-600">{c.phone}</td>
-                    <td className="py-2 pr-3 text-zinc-600">{c.email}</td>
-                    <td className="py-2 pr-3">{c.credit_limit ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 text-xs text-zinc-500">Tiếp theo: màn chi tiết khách + lịch sử đơn hàng + công nợ.</div>
-        </CardContent>
-      </Card>
+    <div className="mx-auto max-w-5xl">
+      <div className="px-6 pt-6 pb-2">
+        <h1 className="text-2xl font-semibold text-gray-800">Khách hàng</h1>
+        <p className="text-sm text-gray-500 mt-1">Danh sách và lịch sử mua hàng</p>
+      </div>
+      <CustomersClient initialCustomers={enriched} />
     </div>
   );
 }

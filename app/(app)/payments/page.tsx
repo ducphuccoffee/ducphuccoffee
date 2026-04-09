@@ -1,25 +1,9 @@
-import { TopBar } from "@/components/TopBar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-export default async function Page() {
-  const supabase = createServerSupabaseClient();
-  // NOTE: chưa dùng supabase ở page này, để sẵn cho bước build flow thu tiền
-  void supabase;
-
+export default function PaymentsPage() {
   return (
-    <div>
-      <TopBar title="Thu tiền" subtitle="Ghi nhận thanh toán, theo dõi công nợ" />
-      <Card>
-        <CardHeader>
-          <CardTitle>MVP</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-zinc-700">
-          <div>
-            Trang Thu tiền đã có route. Bước tiếp theo: form tạo payment + list payments + công nợ theo khách.
-          </div>
-        </CardContent>
-      </Card>
+    <div className="p-8 text-center">
+      <div className="text-5xl mb-4">💳</div>
+      <h1 className="text-2xl font-bold text-gray-700">Thu tiền</h1>
+      <p className="text-gray-400 mt-2">Tính năng đang phát triển</p>
     </div>
   );
 }
