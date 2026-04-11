@@ -7,16 +7,16 @@ const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "Chờ xác nhận",
+  draft: "Nháp",
   confirmed: "Đã xác nhận",
   delivered: "Đã giao",
-  cancelled: "Đã huỷ",
+  closed: "Hoàn tất",
 };
 const STATUS_COLOR: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
+  draft: "bg-gray-100 text-gray-600",
   confirmed: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
+  closed: "bg-purple-100 text-purple-700",
 };
 
 export type OrderItem = {

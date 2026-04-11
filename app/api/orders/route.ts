@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     .insert({
       org_id:       member.org_id,
       customer_id:  resolvedCustomerId,
-      status:       "pending",
+      status:       "draft",
       total_qty_kg: totalQtyKg,
       total_amount: totalAmount,
       created_by:   user.id,
@@ -107,7 +107,7 @@ export async function PATCH(request: Request) {
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
   const body = await request.json();
   const patch: Record<string, any> = {};
-  const VALID_STATUSES = ["pending", "confirmed", "delivered", "cancelled"];
+  const VALID_STATUSES = ["draft", "confirmed", "delivered", "closed"];
   if (body.status !== undefined) {
     if (!VALID_STATUSES.includes(body.status))
       return NextResponse.json({ error: "Trạng thái không hợp lệ" }, { status: 400 });
