@@ -8,21 +8,25 @@ export async function GET(request: Request) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const supabase = createClient(url, key, { auth: { persistSession: false } });
 
-  // Try to select * with limit 0 — PostgREST error reveals column info
-  // Also try insert with a clearly invalid payload to get "column X does not exist"
-  const { data, error } = await supabase.from(table).select("*").limit(0);
+  // Try selecting specific column sets to discover which exist
+  const tests: Record<string, string> = {
+    sell_price:  "id, sell_price",
+    unit_price:  "id, unit_price",
+    price:       "id, price",
+    cost_price:  "id, cost_price",
+    subtotal:    "id, subtotal",
+    product_name:"id, product_name",
+    unit:        "id, unit",
+  };
 
-  // Get the OpenAPI spec and pull column names
-  const specRes = await fetch(`${url}/rest/v1/`, {
-    headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, Authorization: `Bearer ${key}`, Accept: "application/openapi+json" },
-  });
-  const spec = specRes.ok ? await specRes.json() : {};
-  const def  = spec?.definitions?.[table] ?? spec?.components?.schemas?.[table] ?? null;
+  const results: Record<string, string> = {};
+  for (const [col, sel] of Object.entries(tests)) {
+    const { error } = await supabase.from(table).select(sel).limit(0);
+    results[col] = error ? "MISSING: " + error.message : "EXISTS";
+  }
 
-  return NextResponse.json({
-    table,
-    columns_from_openapi: def ? Object.keys(def.properties ?? {}) : null,
-    select_error: error?.message ?? null,
-    data,
-  });
+  // Also try select *
+  const { data: all } = await supabase.from(table).select("*").limit(1);
+
+  return NextResponse.json({ table, column_probe: results, sample: all });
 }
