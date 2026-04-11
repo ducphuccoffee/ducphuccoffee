@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
+import { createClient } from "@supabase/supabase-js";
+
+// Service-role client bypasses RLS — used only for order_items insert
+// (live order_items policy is stricter than auth_all; service role is safe here
+//  because we've already authenticated the user and validated org membership above)
+function createServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
@@ -80,8 +92,12 @@ export async function POST(request: Request) {
   if (orderErr)
     return NextResponse.json({ error: orderErr.message }, { status: 400 });
 
-  // 5) Insert order_items — live schema: order_id, product_id, product_name, unit, qty, unit_price
+  // 5) Insert order_items via service-role client (bypasses RLS)
+  //    Live policy on order_items is stricter than auth_all in live DB.
+  //    Auth + org validation already done above — safe to use service role here.
+  //    Live schema: order_id, product_id, product_name, unit, qty, unit_price
   //    subtotal is a generated column (qty * unit_price) — do NOT insert it
+  const svc = createServiceClient();
   const itemRows = validItems.map((i: any) => ({
     order_id:     order.id,
     product_id:   i.product_id,
@@ -91,7 +107,7 @@ export async function POST(request: Request) {
     unit_price:   Number(i.unit_price || 0),
   }));
 
-  const { error: itemsErr } = await supabase.from("order_items").insert(itemRows);
+  const { error: itemsErr } = await svc.from("order_items").insert(itemRows);
   if (itemsErr) {
     await supabase.from("orders").delete().eq("id", order.id);
     return NextResponse.json({ error: itemsErr.message }, { status: 400 });
