@@ -16,24 +16,62 @@ export async function POST(request: Request) {
   const response = NextResponse.json({});
   const supabase = createRouteSupabase(request, response);
 
+  // 1) Resolve authenticated user
+  const { data: { user } } = await supabase.auth.getUser();
+  console.log("[customers POST] auth.user.id =", user?.id ?? "null");
+
+  if (!user) {
+    return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  }
+
+  // 2) Look up org_id from org_members using the authenticated user
+  const { data: member, error: memberErr } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  console.log("[customers POST] org_id =", member?.org_id ?? "null", "| memberErr =", memberErr?.message ?? "none");
+
+  if (memberErr || !member?.org_id) {
+    return NextResponse.json(
+      { error: "User is not assigned to any organization" },
+      { status: 403 }
+    );
+  }
+
+  // 3) Parse and validate body
   const body = await request.json();
   const { name, phone, address } = body;
   if (!name?.trim())
     return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
 
-  // Only columns that exist in the live customers table (0001_init.sql):
-  // id, name, phone, email, address, credit_limit, created_at
+  const payload = {
+    org_id:  member.org_id,
+    name:    name.trim(),
+    phone:   phone?.trim()   || null,
+    address: address?.trim() || null,
+  };
+
+  console.log("[customers POST] insert payload =", JSON.stringify(payload));
+
+  // 4) Insert
   const { data, error } = await supabase
     .from("customers")
-    .insert({
-      name:    name.trim(),
-      phone:   phone?.trim()   || null,
-      address: address?.trim() || null,
-    })
+    .insert(payload)
     .select("id, name, phone, address")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    console.error("[customers POST] insert error =", error.message, "|", error.details, "|", error.hint);
+    return NextResponse.json(
+      { error: error.message, details: error.details, hint: error.hint },
+      { status: 400 }
+    );
+  }
+
   return NextResponse.json({ data });
 }
 
