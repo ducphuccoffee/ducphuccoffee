@@ -49,10 +49,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
 
   const payload = {
-    org_id:  member.org_id,
-    name:    name.trim(),
-    phone:   phone?.trim()   || null,
-    address: address?.trim() || null,
+    org_id:         member.org_id,
+    owner_user_id:  user.id,
+    name:           name.trim(),
+    phone:          phone?.trim()   || null,
+    address:        address?.trim() || null,
   };
 
   console.log("[customers POST] insert payload =", JSON.stringify(payload));
