@@ -22,13 +22,11 @@ export async function POST(request: Request) {
 
   // 1) Auth
   const { data: { user } } = await supabase.auth.getUser();
-  console.log("[orders POST] user.id =", user?.id ?? "null");
   if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
 
-  // 2) Org
+  // 2) Org — resolve from org_members, same pattern as customers route
   const { data: member, error: memberErr } = await supabase
     .from("org_members").select("org_id").eq("user_id", user.id).eq("is_active", true).limit(1).maybeSingle();
-  console.log("[orders POST] org_id =", member?.org_id ?? "null", memberErr?.message ?? "");
   if (memberErr || !member?.org_id)
     return NextResponse.json({ error: "User is not assigned to any organization" }, { status: 403 });
 
@@ -36,7 +34,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { customer_id, customer_name, items, tax_rate } = body;
 
-  // Need a customer_id — if not provided, look up by name within this org
+  // Resolve customer_id — prefer explicit id, fallback to name lookup within org
   let resolvedCustomerId: string | null = customer_id ?? null;
   if (!resolvedCustomerId && customer_name?.trim()) {
     const { data: found } = await supabase
@@ -47,7 +45,6 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
     resolvedCustomerId = found?.id ?? null;
-    console.log("[orders POST] customer lookup by name →", resolvedCustomerId);
   }
 
   if (!resolvedCustomerId)
@@ -62,33 +59,29 @@ export async function POST(request: Request) {
 
   const validTaxRates = [0, 0.08, 0.10];
   const resolvedTaxRate = validTaxRates.includes(Number(tax_rate)) ? Number(tax_rate) : 0;
-  const subtotal = validItems.reduce((s: number, i: any) => s + Number(i.qty) * Number(i.unit_price || i.sell_price || 0), 0);
+  const subtotal    = validItems.reduce((s: number, i: any) => s + Number(i.qty) * Number(i.unit_price || 0), 0);
   const totalAmount = Math.round(subtotal * (1 + resolvedTaxRate));
   const totalQtyKg  = validItems.reduce((s: number, i: any) => s + Number(i.qty), 0);
 
-  // 4) Insert order
-  const orderPayload = {
-    org_id:        member.org_id,
-    customer_id:   resolvedCustomerId,
-    status:        "pending",
-    total_qty_kg:  totalQtyKg,
-    total_amount:  totalAmount,
-    created_by:    user.id,
-  };
-  console.log("[orders POST] order payload =", JSON.stringify(orderPayload));
-
+  // 4) Insert order — live schema: org_id, customer_id, status, total_qty_kg, total_amount, created_by
   const { data: order, error: orderErr } = await supabase
     .from("orders")
-    .insert(orderPayload)
+    .insert({
+      org_id:       member.org_id,
+      customer_id:  resolvedCustomerId,
+      status:       "pending",
+      total_qty_kg: totalQtyKg,
+      total_amount: totalAmount,
+      created_by:   user.id,
+    })
     .select("id, org_id, customer_id, status, total_qty_kg, total_amount, created_at")
     .single();
 
-  if (orderErr) {
-    console.error("[orders POST] order insert error =", orderErr.message, orderErr.details, orderErr.hint);
-    return NextResponse.json({ error: orderErr.message, details: orderErr.details, hint: orderErr.hint }, { status: 400 });
-  }
+  if (orderErr)
+    return NextResponse.json({ error: orderErr.message }, { status: 400 });
 
-  // 5) Insert order_items — live schema: order_id, product_id, qty, unit_price, product_name, unit
+  // 5) Insert order_items — live schema: order_id, product_id, product_name, unit, qty, unit_price
+  //    subtotal is a generated column (qty * unit_price) — do NOT insert it
   const itemRows = validItems.map((i: any) => ({
     order_id:     order.id,
     product_id:   i.product_id,
@@ -97,14 +90,11 @@ export async function POST(request: Request) {
     qty:          Number(i.qty),
     unit_price:   Number(i.unit_price || 0),
   }));
-  console.log("[orders POST] order_items payload =", JSON.stringify(itemRows));
 
   const { error: itemsErr } = await supabase.from("order_items").insert(itemRows);
   if (itemsErr) {
-    // Rollback order
     await supabase.from("orders").delete().eq("id", order.id);
-    console.error("[orders POST] order_items error =", itemsErr.message, itemsErr.details);
-    return NextResponse.json({ error: itemsErr.message, details: itemsErr.details }, { status: 400 });
+    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true, data: order });
