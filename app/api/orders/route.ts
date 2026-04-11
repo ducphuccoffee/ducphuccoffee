@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     .select(`
       id, org_id, customer_id, status, total_qty_kg, total_amount, created_by, created_at,
       customers(id, name, phone),
-      order_items(id, product_id, qty, sell_price)
+      order_items(id, product_id, product_name, unit, qty, unit_price, subtotal)
     `)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -88,13 +88,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: orderErr.message, details: orderErr.details, hint: orderErr.hint }, { status: 400 });
   }
 
-  // 5) Insert order_items — live schema: order_id, product_id, qty, sell_price, cost_price
+  // 5) Insert order_items — live schema: order_id, product_id, qty, unit_price, product_name, unit
   const itemRows = validItems.map((i: any) => ({
-    order_id:   order.id,
-    product_id: i.product_id,
-    qty:        Number(i.qty),
-    sell_price: Number(i.unit_price || i.sell_price || 0),
-    cost_price: Number(i.cost_price || 0),
+    order_id:     order.id,
+    product_id:   i.product_id,
+    product_name: String(i.product_name || ""),
+    unit:         String(i.unit || "kg"),
+    qty:          Number(i.qty),
+    unit_price:   Number(i.unit_price || 0),
   }));
   console.log("[orders POST] order_items payload =", JSON.stringify(itemRows));
 

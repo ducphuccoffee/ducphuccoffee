@@ -203,9 +203,11 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
           customer_name:  customerName.trim(),
           tax_rate:       taxRate,
           items: validItems.map((i) => ({
-            product_id: i.product_id,
-            qty:        Number(i.qty),
-            unit_price: Number(i.unit_price) || 0,
+            product_id:   i.product_id,
+            product_name: i.product_name,
+            unit:         i.unit,
+            qty:          Number(i.qty),
+            unit_price:   Number(i.unit_price) || 0,
           })),
         }),
       });

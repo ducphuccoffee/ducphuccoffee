@@ -11,7 +11,7 @@ export default async function OrdersPage() {
       .select(`
         id, org_id, customer_id, status, total_qty_kg, total_amount, created_at,
         customers(id, name, phone),
-        order_items(id, product_id, qty, sell_price)
+        order_items(id, product_id, product_name, unit, qty, unit_price, subtotal)
       `)
       .order("created_at", { ascending: false })
       .limit(200),
@@ -45,11 +45,11 @@ export default async function OrdersPage() {
     order_items:    (o.order_items || []).map((it: any) => ({
       id:           it.id,
       product_id:   it.product_id,
-      product_name: "",          // not stored in live order_items
-      unit:         "kg",
+      product_name: it.product_name ?? "",
+      unit:         it.unit ?? "kg",
       qty:          it.qty,
-      unit_price:   it.sell_price,
-      subtotal:     it.qty * it.sell_price,
+      unit_price:   it.unit_price,
+      subtotal:     it.subtotal,
     })),
   }));
 
