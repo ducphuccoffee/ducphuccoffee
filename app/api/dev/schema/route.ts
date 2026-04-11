@@ -14,25 +14,36 @@ export async function GET(request: Request) {
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
 
-  // Fetch one real row so we see every column name and value
+  // 1) One real row (if exists)
   const { data: sample, error: sampleErr } = await supabase
-    .from(table)
-    .select("*")
-    .limit(1);
+    .from(table).select("*").limit(1);
 
-  // Also fetch order_items sample if table=orders
-  let items = null, itemsErr = null;
+  // 2) OpenAPI spec → column definitions (works even on empty tables)
+  const specRes = await fetch(`${url}/rest/v1/`, {
+    headers: { apikey: anonKey, Authorization: `Bearer ${key}`, Accept: "application/openapi+json" },
+  });
+  const spec   = specRes.ok ? await specRes.json() : null;
+  const schema = spec?.definitions?.[table]
+              ?? spec?.components?.schemas?.[table]
+              ?? null;
+
+  // 3) For orders, also get order_items columns
+  let itemsSchema = null;
   if (table === "orders") {
-    const r = await supabase.from("order_items").select("*").limit(1);
-    items    = r.data;
-    itemsErr = r.error?.message ?? null;
+    itemsSchema = spec?.definitions?.["order_items"]
+               ?? spec?.components?.schemas?.["order_items"]
+               ?? null;
   }
 
   return NextResponse.json({
     table,
-    sample:       sample ?? null,
-    sample_error: sampleErr?.message ?? null,
-    order_items_sample:  items,
-    order_items_error:   itemsErr,
+    columns:       schema?.properties   ? Object.keys(schema.properties) : null,
+    required:      schema?.required     ?? null,
+    properties:    schema?.properties   ?? null,
+    sample:        sample               ?? null,
+    sample_error:  sampleErr?.message   ?? null,
+    order_items_columns:  itemsSchema?.properties ? Object.keys(itemsSchema.properties) : null,
+    order_items_required: itemsSchema?.required   ?? null,
+    order_items_props:    itemsSchema?.properties ?? null,
   });
 }
