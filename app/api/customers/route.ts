@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createRouteSupabase } from "@/lib/supabase/route";
 
-export async function GET() {
-  const supabase = await createServerSupabaseClient();
+export async function GET(request: Request) {
+  const response = NextResponse.json({});
+  const supabase = createRouteSupabase(request, response);
   const { data, error } = await supabase
     .from("customers")
     .select("id, name, phone, address")
@@ -11,9 +12,10 @@ export async function GET() {
   return NextResponse.json({ data });
 }
 
-export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient();
-  const body = await req.json();
+export async function POST(request: Request) {
+  const response = NextResponse.json({});
+  const supabase = createRouteSupabase(request, response);
+  const body = await request.json();
   const { name, phone, address } = body;
   if (!name?.trim()) return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
   const { data, error } = await supabase
@@ -25,12 +27,13 @@ export async function POST(req: Request) {
   return NextResponse.json({ data });
 }
 
-export async function PATCH(req: Request) {
-  const supabase = await createServerSupabaseClient();
-  const { searchParams } = new URL(req.url);
+export async function PATCH(request: Request) {
+  const response = NextResponse.json({});
+  const supabase = createRouteSupabase(request, response);
+  const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
-  const body = await req.json();
+  const body = await request.json();
   const { name, phone, address } = body;
   if (!name?.trim()) return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
   const { data, error } = await supabase
@@ -43,9 +46,10 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ data });
 }
 
-export async function DELETE(req: Request) {
-  const supabase = await createServerSupabaseClient();
-  const { searchParams } = new URL(req.url);
+export async function DELETE(request: Request) {
+  const response = NextResponse.json({});
+  const supabase = createRouteSupabase(request, response);
+  const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
   const { error } = await supabase.from("customers").delete().eq("id", id);
