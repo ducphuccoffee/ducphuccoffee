@@ -16,51 +16,24 @@ export async function POST(request: Request) {
   const response = NextResponse.json({});
   const supabase = createRouteSupabase(request, response);
 
-  // Resolve auth session — required to satisfy any owner_id-based RLS policy
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-
-  // DEBUG: log auth state (remove after confirming fix works)
-  console.log("[customers POST] auth.user.id =", user?.id ?? "null");
-  console.log("[customers POST] auth.error   =", authErr?.message ?? "none");
-
-  if (!user) {
-    return NextResponse.json(
-      { error: "Không xác thực được người dùng. Vui lòng đăng nhập lại." },
-      { status: 401 }
-    );
-  }
-
   const body = await request.json();
   const { name, phone, address } = body;
   if (!name?.trim())
     return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
 
-  const payload = {
-    name:       name.trim(),
-    phone:      phone?.trim()   || null,
-    address:    address?.trim() || null,
-    owner_id:   user.id,   // satisfies: owner_id = auth.uid()
-    created_by: user.id,   // satisfies: created_by = auth.uid() if that column exists
-  };
-
-  // DEBUG: log full insert payload (remove after confirming fix works)
-  console.log("[customers POST] insert payload =", JSON.stringify(payload));
-
+  // Only columns that exist in the live customers table (0001_init.sql):
+  // id, name, phone, email, address, credit_limit, created_at
   const { data, error } = await supabase
     .from("customers")
-    .insert(payload)
+    .insert({
+      name:    name.trim(),
+      phone:   phone?.trim()   || null,
+      address: address?.trim() || null,
+    })
     .select("id, name, phone, address")
     .single();
 
-  if (error) {
-    // Return detailed error to aid diagnosis
-    console.error("[customers POST] insert error =", error.message, error.details, error.hint);
-    return NextResponse.json(
-      { error: error.message, details: error.details, hint: error.hint },
-      { status: 400 }
-    );
-  }
-
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ data });
 }
 
