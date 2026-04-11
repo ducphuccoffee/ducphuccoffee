@@ -15,7 +15,7 @@ export default async function OrdersPage() {
       `)
       .order("created_at", { ascending: false })
       .limit(200),
-    supabase.from("products").select("id, name, sku, unit, sell_price").eq("is_active", true).order("name"),
+    supabase.from("products").select("id, name, sku, unit, price").eq("is_active", true).order("name"),
     supabase.from("customers").select("id, name, phone, address").order("name"),
   ]);
 
@@ -24,7 +24,7 @@ export default async function OrdersPage() {
     name: p.name,
     sku: p.sku ?? null,
     unit: p.unit ?? "kg",
-    price: Number(p.sell_price) || 0,
+    price: Number(p.price) || 0,
   }));
 
   const customers: Customer[] = (customersRaw || []).map((c: any) => ({
