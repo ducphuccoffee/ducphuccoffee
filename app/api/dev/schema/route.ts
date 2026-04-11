@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-// TEMP diagnostic: returns live customers schema via Supabase pg_meta API
+// TEMP diagnostic: returns live schema for a table
 // GET /api/dev/schema?table=customers
-// Remove this file after schema is confirmed.
+// Remove after confirmed.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const table = searchParams.get("table") ?? "customers";
@@ -12,19 +13,34 @@ export async function GET(request: Request) {
   const anonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const key        = serviceKey ?? anonKey;
 
-  // Supabase exposes pg_meta at /pg-meta/default/columns
-  // This requires service role key for full access
-  const [colsRes, polsRes] = await Promise.all([
-    fetch(`${url}/pg-meta/default/columns?table_id=${encodeURIComponent(table)}&limit=100`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    }),
-    fetch(`${url}/pg-meta/default/policies?table_name=${encodeURIComponent(table)}&limit=100`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    }),
-  ]);
+  // Strategy: do a SELECT * LIMIT 0 — PostgREST returns column definitions
+  // in the response headers (Content-Range) and the empty array lets us
+  // inspect what Supabase accepts. For the real column list we use
+  // the PostgREST OpenAPI spec which is always available.
+  const specRes = await fetch(`${url}/rest/v1/`, {
+    headers: {
+      apikey:        anonKey,
+      Authorization: `Bearer ${key}`,
+      Accept:        "application/openapi+json",
+    },
+  });
 
-  const cols = colsRes.ok  ? await colsRes.json()  : { error: await colsRes.text() };
-  const pols = polsRes.ok  ? await polsRes.json()  : { error: await polsRes.text() };
+  const spec = specRes.ok ? await specRes.json() : { error: await specRes.text() };
 
-  return NextResponse.json({ table, columns: cols, policies: pols });
+  // Extract just the customers table definition
+  const tableDef = spec?.definitions?.[table] ?? spec?.components?.schemas?.[table] ?? null;
+
+  // Also try a direct Supabase admin client to query the table
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data: sample, error: sampleErr } = await supabase
+    .from(table)
+    .select("*")
+    .limit(1);
+
+  return NextResponse.json({
+    table,
+    schema:       tableDef,
+    sample:       sample ?? null,
+    sample_error: sampleErr?.message ?? null,
+  });
 }
