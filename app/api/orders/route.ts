@@ -24,11 +24,14 @@ export async function GET() {
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient();
   const body = await req.json();
-  const { customer_name, customer_phone, note, items } = body;
+  const { customer_name, customer_phone, note, items, tax_rate } = body;
   if (!customer_name?.trim()) return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
   if (!items?.length) return NextResponse.json({ error: "Đơn hàng cần ít nhất 1 sản phẩm" }, { status: 400 });
 
-  const total = items.reduce((s: number, i: any) => s + Number(i.qty) * Number(i.unit_price), 0);
+  const validTaxRates = [0, 0.08, 0.10];
+  const resolvedTaxRate = validTaxRates.includes(Number(tax_rate)) ? Number(tax_rate) : 0;
+  const subtotal = items.reduce((s: number, i: any) => s + Number(i.qty) * Number(i.unit_price), 0);
+  const total = Math.round(subtotal * (1 + resolvedTaxRate));
 
   const { data: order, error: oErr } = await supabase
     .from("orders")

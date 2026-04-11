@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const money = (n: number) =>
@@ -66,6 +66,12 @@ const emptyItem = (products: Product[]): ItemRow => ({
   unit_price: String(products[0]?.price || ""),
 });
 
+const TAX_OPTIONS = [
+  { label: "0%", value: 0 },
+  { label: "8%", value: 0.08 },
+  { label: "10%", value: 0.10 },
+];
+
 type Props = { initialOrders: Order[]; products: Product[]; initialCustomers?: Customer[] };
 
 export function OrdersClient({ initialOrders, products, initialCustomers = [] }: Props) {
@@ -79,11 +85,75 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
-  // Form state
+  // Customer list (grows when quick-create adds a new one)
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+
+  // Order form state
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [note, setNote] = useState("");
   const [items, setItems] = useState<ItemRow[]>([emptyItem(products)]);
+  const [taxRate, setTaxRate] = useState<number>(0);
+
+  // Customer search dropdown
+  const [custSearch, setCustSearch] = useState("");
+  const [custDropOpen, setCustDropOpen] = useState(false);
+  const custDropRef = useRef<HTMLDivElement>(null);
+
+  // Quick-create customer modal
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [qcName, setQcName] = useState("");
+  const [qcPhone, setQcPhone] = useState("");
+  const [qcAddress, setQcAddress] = useState("");
+  const [qcSaving, setQcSaving] = useState(false);
+  const [qcError, setQcError] = useState<string | null>(null);
+
+  // Close customer dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (custDropRef.current && !custDropRef.current.contains(e.target as Node)) {
+        setCustDropOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filteredCustomers = useMemo(() => {
+    const q = custSearch.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone || "").includes(q)
+    );
+  }, [customers, custSearch]);
+
+  function selectCustomer(c: Customer) {
+    setSelectedCustomerId(c.id);
+    setCustomerName(c.name);
+    setCustomerPhone(c.phone || "");
+    setCustomerAddress(c.address || "");
+    setCustSearch(c.name);
+    setCustDropOpen(false);
+  }
+
+  function clearCustomer() {
+    setSelectedCustomerId("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setCustSearch("");
+  }
+
+  const subtotalCalc = useMemo(
+    () => items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.unit_price) || 0), 0),
+    [items]
+  );
+  const taxAmount = Math.round(subtotalCalc * taxRate);
+  const totalCalc = subtotalCalc + taxAmount;
 
   const filtered = useMemo(() => {
     let list = orders;
@@ -97,15 +167,12 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
     return list;
   }, [orders, search, statusFilter]);
 
-  const totalCalc = useMemo(() =>
-    items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.unit_price) || 0), 0),
-    [items]
-  );
-
   function openCreate() {
-    setCustomerName(""); setCustomerPhone(""); setNote("");
+    clearCustomer();
+    setNote("");
     setItems([emptyItem(products)]);
     setFormError(null);
+    setTaxRate(0);
     setShowModal(true);
   }
 
@@ -122,7 +189,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-    if (!customerName.trim()) { setFormError("Vui lòng nhập tên khách hàng"); return; }
+    if (!customerName.trim()) { setFormError("Vui lòng chọn hoặc nhập tên khách hàng"); return; }
     const validItems = items.filter((i) => i.product_id && Number(i.qty) > 0);
     if (!validItems.length) { setFormError("Cần ít nhất 1 sản phẩm hợp lệ"); return; }
 
@@ -135,6 +202,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim() || null,
           note: note.trim() || null,
+          tax_rate: taxRate,
           items: validItems.map((i) => ({
             product_id: i.product_id,
             product_name: i.product_name,
@@ -150,6 +218,43 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
       router.refresh();
     } catch { setFormError("Lỗi kết nối"); }
     finally { setSaving(false); }
+  }
+
+  async function handleQuickCreateCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    setQcError(null);
+    if (!qcName.trim()) { setQcError("Vui lòng nhập tên khách hàng"); return; }
+    setQcSaving(true);
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: qcName.trim(),
+          phone: qcPhone.trim() || null,
+          address: qcAddress.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) { setQcError(json.error ?? "Lỗi tạo khách hàng"); return; }
+      const newCustomer: Customer = json.data;
+      // Add to local list, keep sorted
+      setCustomers((prev) =>
+        [...prev, newCustomer].sort((a, b) => a.name.localeCompare(b.name, "vi"))
+      );
+      // Auto-select the new customer
+      selectCustomer(newCustomer);
+      setShowQuickCreate(false);
+    } catch { setQcError("Lỗi kết nối"); }
+    finally { setQcSaving(false); }
+  }
+
+  function openQuickCreate() {
+    setQcName(custSearch); // pre-fill with whatever was typed
+    setQcPhone("");
+    setQcAddress("");
+    setQcError(null);
+    setShowQuickCreate(true);
   }
 
   async function handleStatusChange(id: string, status: string) {
@@ -247,7 +352,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
         </table>
       </div>
 
-      {/* Modal tạo đơn */}
+      {/* ── Modal tạo đơn ────────────────────────────────────────── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -255,16 +360,79 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
               <h2 className="text-lg font-semibold text-gray-800">Tạo đơn hàng mới</h2>
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
+
+              {/* ── Customer searchable dropdown ── */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Khách hàng *</label>
+                <div className="flex gap-2">
+                  {/* Dropdown wrapper */}
+                  <div className="relative flex-1" ref={custDropRef}>
+                    <input
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Tìm tên hoặc SĐT khách hàng..."
+                      value={custSearch}
+                      onChange={(e) => {
+                        setCustSearch(e.target.value);
+                        setCustomerName(e.target.value);
+                        setSelectedCustomerId("");
+                        setCustDropOpen(true);
+                      }}
+                      onFocus={() => setCustDropOpen(true)}
+                      autoComplete="off"
+                    />
+                    {custDropOpen && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {filteredCustomers.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-gray-400">
+                            Không tìm thấy khách hàng
+                          </div>
+                        ) : (
+                          filteredCustomers.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition flex flex-col"
+                              onMouseDown={(e) => { e.preventDefault(); selectCustomer(c); }}
+                            >
+                              <span className="font-medium text-gray-800">{c.name}</span>
+                              {c.phone && <span className="text-xs text-gray-400">{c.phone}</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Quick-create button */}
+                  <button
+                    type="button"
+                    title="Thêm khách hàng mới"
+                    onClick={openQuickCreate}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition text-lg font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Auto-filled phone + address (read-only if from dropdown, editable if typed) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên khách hàng *</label>
-                  <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nguyễn Văn A" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0909..."
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                  <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0909..." value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Địa chỉ giao hàng"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -305,8 +473,32 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 text-right text-sm font-semibold text-gray-800">
-                  Tổng: {money(totalCalc)}
+
+                {/* Tax + totals */}
+                <div className="mt-3 space-y-1.5 text-sm border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Tạm tính</span>
+                    <span className="font-medium text-gray-800">{money(subtotalCalc)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-500 shrink-0">Thuế VAT</span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={taxRate}
+                        onChange={(e) => setTaxRate(Number(e.target.value))}
+                      >
+                        {TAX_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <span className="font-medium text-gray-800 w-28 text-right">{money(taxAmount)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between font-semibold text-gray-800 text-base border-t border-gray-100 pt-1.5">
+                    <span>Tổng cộng</span>
+                    <span className="text-blue-700">{money(totalCalc)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -331,7 +523,70 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
         </div>
       )}
 
-      {/* Modal xác nhận xoá */}
+      {/* ── Quick-create customer modal (z-60, above order modal) ── */}
+      {showQuickCreate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-800">Thêm khách hàng mới</h2>
+              <button
+                type="button"
+                onClick={() => setShowQuickCreate(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >×</button>
+            </div>
+            <form onSubmit={handleQuickCreateCustomer} className="p-5 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tên khách *</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Nguyễn Văn A"
+                  value={qcName}
+                  onChange={(e) => setQcName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0901 234 567"
+                  value={qcPhone}
+                  onChange={(e) => setQcPhone(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
+                <textarea
+                  rows={2}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="123 Nguyễn Huệ, Q.1, TP.HCM"
+                  value={qcAddress}
+                  onChange={(e) => setQcAddress(e.target.value)}
+                />
+              </div>
+              {qcError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">⚠️ {qcError}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCreate(false)}
+                  disabled={qcSaving}
+                  className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
+                >Huỷ</button>
+                <button
+                  type="submit"
+                  disabled={qcSaving}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition"
+                >{qcSaving ? "Đang lưu..." : "Thêm khách"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal xác nhận xoá ────────────────────────────────────── */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -349,7 +604,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
         </div>
       )}
 
-      {/* Modal chi tiết đơn */}
+      {/* ── Modal chi tiết đơn ────────────────────────────────────── */}
       {detailOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
