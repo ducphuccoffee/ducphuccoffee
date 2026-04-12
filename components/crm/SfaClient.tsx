@@ -115,37 +115,27 @@ export function SfaClient({
         </button>
       </div>
 
-      {/* Visits table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="text-left px-4 py-3">Khách hàng</th>
-              <th className="text-left px-4 py-3 hidden sm:table-cell">Thời gian</th>
-              <th className="text-left px-4 py-3">Kết quả</th>
-              <th className="text-left px-4 py-3 hidden md:table-cell">Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visits.map(v => (
-              <tr key={v.id} className="border-t border-gray-100 hover:bg-gray-50 transition">
-                <td className="px-4 py-3 font-medium text-gray-800">{v.customer_name}</td>
-                <td className="px-4 py-3 text-gray-500 hidden sm:table-cell text-xs">
-                  {new Date(v.check_in_time).toLocaleString("vi-VN")}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[v.status] ?? "bg-gray-100 text-gray-500"}`}>
-                    {STATUS_LABEL[v.status] ?? v.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{v.note ?? "—"}</td>
-              </tr>
-            ))}
-            {visits.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400">Chưa có visit nào</td></tr>
-            )}
-          </tbody>
-        </table>
+      {/* Visits list — card layout (mobile-first) */}
+      <div className="space-y-2">
+        {visits.length === 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+            Chưa có visit nào
+          </div>
+        )}
+        {visits.map(v => (
+          <div key={v.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">{v.customer_name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {new Date(v.check_in_time).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}
+              </p>
+              {v.note && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{v.note}</p>}
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 mt-0.5 ${STATUS_COLOR[v.status] ?? "bg-gray-100 text-gray-500"}`}>
+              {STATUS_LABEL[v.status] ?? v.status}
+            </span>
+          </div>
+        ))}
       </div>
 
       {/* New visit modal */}

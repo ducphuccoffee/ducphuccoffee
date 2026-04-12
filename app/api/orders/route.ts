@@ -15,7 +15,10 @@ function createServiceClient() {
 
 export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
-  const { data, error } = await supabase
+  const { searchParams } = new URL(request.url);
+  const customerId = searchParams.get("customer_id");
+
+  let q = supabase
     .from("orders")
     .select(`
       id, org_id, customer_id, status, total_qty_kg, total_amount, created_by, created_at,
@@ -24,6 +27,10 @@ export async function GET(request: Request) {
     `)
     .order("created_at", { ascending: false })
     .limit(200);
+
+  if (customerId) q = q.eq("customer_id", customerId);
+
+  const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ data });
 }

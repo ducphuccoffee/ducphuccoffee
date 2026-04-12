@@ -18,7 +18,13 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
   "/settings":    { title: "Cài đặt",      desc: "Cấu hình hệ thống" },
 };
 
-export function StickyTopbar() {
+export function StickyTopbar({
+  displayName = "Admin",
+  initials = "AD",
+}: {
+  displayName?: string;
+  initials?: string;
+}) {
   const pathname = usePathname();
   const meta = PAGE_META[pathname] ?? { title: "Đức Phúc Coffee", desc: "" };
 
@@ -55,9 +61,9 @@ export function StickyTopbar() {
 
         <div className="flex items-center gap-2 pl-2 border-l border-gray-200 ml-1">
           <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[11px] font-bold">
-            HT
+            {initials}
           </div>
-          <span className="text-[12px] font-semibold text-gray-700 hidden sm:block">Huỳnh Tài</span>
+          <span className="text-[12px] font-semibold text-gray-700 hidden sm:block">{displayName}</span>
         </div>
       </div>
     </header>

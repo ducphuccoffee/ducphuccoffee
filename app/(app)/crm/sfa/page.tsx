@@ -17,11 +17,11 @@ export default async function SfaPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return <div className="p-8 text-red-500">Chưa đăng nhập</div>;
 
-  const { data: member } = await supabase
-    .from("org_members").select("role")
-    .eq("user_id", user.id).eq("is_active", true).limit(1).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles").select("role")
+    .eq("id", user.id).maybeSingle();
 
-  const isAdmin = ["admin", "manager"].includes(member?.role ?? "");
+  const isAdmin = ["admin", "manager", "roastery_manager"].includes(profile?.role ?? "");
 
   // Customers with lat/lng for map (server filtered)
   let custQ = svc()

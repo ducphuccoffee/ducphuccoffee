@@ -1,4 +1,3 @@
-import { TopBar } from "@/components/TopBar";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   Package,
@@ -86,6 +85,7 @@ export default async function DashboardPage() {
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
 
   const [
+    { data: { user } },
     { count: products },
     { count: customers },
     { count: orders },
@@ -93,20 +93,30 @@ export default async function DashboardPage() {
     { count: ordersThisMonth },
     { data: recentOrders },
   ] = await Promise.all([
+    supabase.auth.getUser(),
     supabase.from("products").select("*", { count: "exact", head: true }),
     supabase.from("customers").select("*", { count: "exact", head: true }),
     supabase.from("orders").select("*", { count: "exact", head: true }),
     supabase.from("roast_batches").select("*", { count: "exact", head: true }),
     supabase.from("orders").select("*", { count: "exact", head: true }).gte("created_at", startOfMonth),
     supabase.from("orders")
-      .select("id, order_code, customer_name, total_amount, status, created_at")
+      .select("id, order_code, customers(name), total_amount, status, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
 
+  // Resolve display name: profile full_name → email → fallback
+  let displayName = "bạn";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    displayName = profile?.full_name || user.email?.split("@")[0] || "bạn";
+  }
+
   const todayStr = today.toLocaleDateString("vi-VN", {
     weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
   });
+
 
   return (
     <div className="space-y-6">
@@ -116,7 +126,7 @@ export default async function DashboardPage() {
         <div>
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Tổng quan</p>
           <h1 className="text-[20px] font-bold text-gray-800 mt-0.5">
-            Xin chào, Huỳnh Tài 👋
+            Xin chào, {displayName} 👋
           </h1>
         </div>
         <p className="text-[12px] text-gray-400 hidden sm:block">{todayStr}</p>
@@ -188,7 +198,7 @@ export default async function DashboardPage() {
                     <p className="text-[13px] font-semibold text-gray-800 truncate">
                       {order.order_code || `#${order.id.slice(0, 8)}`}
                     </p>
-                    <p className="text-[11px] text-gray-400 truncate">{order.customer_name || "—"}</p>
+                    <p className="text-[11px] text-gray-400 truncate">{(order.customers as any)?.name || "—"}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[13px] font-bold text-gray-800">

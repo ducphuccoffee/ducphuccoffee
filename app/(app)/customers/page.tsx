@@ -2,30 +2,31 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CustomersClient } from "@/components/customers/CustomersClient";
 
 export default async function CustomersPage() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServerSupabaseClient();
 
-  const { data: customers } = await supabase
-    .from("customers")
-    .select("id, name, phone, address, created_at")
-    .order("name");
+  const [{ data: customers }, { data: orderStats }] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("id, name, phone, address, created_at")
+      .order("name"),
+    supabase
+      .from("orders")
+      .select("customer_id, total_amount, status"),
+  ]);
 
-  const { data: orderStats } = await supabase
-    .from("orders")
-    .select("customer_name, total_amount, status");
-
-  // build spend map
+  // build spend map keyed by customer_id (correct foreign key)
   const spendMap: Record<string, number> = {};
   const countMap: Record<string, number> = {};
   for (const o of orderStats || []) {
-    if (!o.customer_name) continue;
-    spendMap[o.customer_name] = (spendMap[o.customer_name] || 0) + (Number(o.total_amount) || 0);
-    countMap[o.customer_name] = (countMap[o.customer_name] || 0) + 1;
+    if (!o.customer_id) continue;
+    spendMap[o.customer_id] = (spendMap[o.customer_id] || 0) + (Number(o.total_amount) || 0);
+    countMap[o.customer_id] = (countMap[o.customer_id] || 0) + 1;
   }
 
   const enriched = (customers || []).map((c: any) => ({
     ...c,
-    total_spend: spendMap[c.name] || 0,
-    order_count: countMap[c.name] || 0,
+    total_spend: spendMap[c.id] || 0,
+    order_count: countMap[c.id] || 0,
   }));
 
   return (

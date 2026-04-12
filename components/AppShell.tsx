@@ -73,7 +73,7 @@ const NAV_GROUPS = [
 ];
 
 // ── Sidebar desktop ──────────────────────────────────────────────
-function SidebarContent({ pathname }: { pathname: string }) {
+function SidebarContent({ pathname, displayName, initials }: { pathname: string; displayName: string; initials: string }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -133,11 +133,11 @@ function SidebarContent({ pathname }: { pathname: string }) {
       >
         <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-white/[0.06] cursor-pointer transition-colors">
           <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
-            ĐP
+            {initials}
           </div>
           <div className="overflow-hidden leading-snug flex-1">
-            <p className="text-[12px] text-slate-300 font-semibold truncate">Huỳnh Tài</p>
-            <p className="text-[10px] text-slate-600 truncate">Quản trị viên</p>
+            <p className="text-[12px] text-slate-300 font-semibold truncate">{displayName}</p>
+            <p className="text-[10px] text-slate-600 truncate">Đã đăng nhập</p>
           </div>
         </div>
       </div>
@@ -146,7 +146,17 @@ function SidebarContent({ pathname }: { pathname: string }) {
 }
 
 // ── Main AppShell ────────────────────────────────────────────────
-export function AppShell({ children, topbar }: { children: React.ReactNode; topbar?: React.ReactNode }) {
+export function AppShell({
+  children,
+  topbar,
+  displayName = "Admin",
+  initials = "AD",
+}: {
+  children: React.ReactNode;
+  topbar?: React.ReactNode;
+  displayName?: string;
+  initials?: string;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -161,7 +171,7 @@ export function AppShell({ children, topbar }: { children: React.ReactNode; topb
         className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40"
         style={{ width: 220, background: "#101828" }}
       >
-        <SidebarContent pathname={pathname} />
+        <SidebarContent pathname={pathname} displayName={displayName} initials={initials} />
       </aside>
 
       {/* ── Main content area ──────────── */}
@@ -215,7 +225,7 @@ export function AppShell({ children, topbar }: { children: React.ReactNode; topb
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <SidebarContent pathname={pathname} />
+              <SidebarContent pathname={pathname} displayName={displayName} initials={initials} />
             </div>
           </div>
         </div>
