@@ -28,36 +28,15 @@ export default async function CrmCarePage() {
   const isAdmin = ["admin", "manager", "roastery_manager"].includes(profile?.role ?? "");
 
   // Fetch customers (permission-filtered at server)
-  // Query only base columns first; add CRM columns if migration has been applied
   let custQ = svc()
     .from("customers")
     .select(
-      "id, name, phone, address, created_at"
+      "id, name, phone, address, assigned_user_id, next_follow_up_at, latitude, longitude, crm_status, crm_segment, created_at"
     )
     .order("name");
-  const { data: customersBase, error: custErr } = await custQ;
-
-  // Try to fetch CRM columns separately (graceful fallback if columns don't exist yet)
-  let crmCols: Record<string, any> = {};
-  if (!custErr && customersBase && customersBase.length > 0) {
-    const { data: crmData } = await svc()
-      .from("customers")
-      .select("id, assigned_user_id, next_follow_up_at, latitude, longitude, crm_status, crm_segment")
-      .in("id", customersBase.map((c: any) => c.id));
-    if (crmData) {
-      for (const c of crmData) crmCols[c.id] = c;
-    }
-  }
-
-  const customers = (customersBase ?? []).map((c: any) => ({
-    ...c,
-    ...(crmCols[c.id] ?? {}),
-  }));
-
-  // Filter by assigned user if not admin (only if crm cols loaded)
-  const visibleCustomers = isAdmin
-    ? customers
-    : customers.filter((c: any) => !c.assigned_user_id || c.assigned_user_id === user.id);
+  if (!isAdmin) custQ = custQ.eq("assigned_user_id", user.id);
+  const { data: rawCustomers } = await custQ;
+  const visibleCustomers = rawCustomers ?? [];
 
   // Fetch order aggregates per customer (only for visible customers)
   const customerIds = (visibleCustomers ?? []).map((c: any) => c.id);
