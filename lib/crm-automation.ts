@@ -192,8 +192,13 @@ export function buildTimeline(
       ts: o.created_at,
       title: `Đơn hàng${o.order_code ? ` #${o.order_code}` : ""}`,
       subtitle: Number(o.total_amount).toLocaleString("vi-VN") + " ₫",
-      badge: o.status ?? "draft",
-      badge_color: o.status === "done" ? "green" : o.status === "cancelled" ? "red" : "blue",
+      badge: o.status ?? "new",
+      badge_color:
+        o.status === "completed" || o.status === "delivered"
+          ? "green"
+          : o.status === "cancelled" || o.status === "failed"
+          ? "red"
+          : "blue",
     });
   }
 
