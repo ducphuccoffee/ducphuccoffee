@@ -71,14 +71,24 @@ export async function PATCH(request: Request) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
   const body = await request.json();
-  const { name, phone, address } = body;
-  if (!name?.trim())
-    return NextResponse.json({ error: "Thiếu tên khách hàng" }, { status: 400 });
+  const patch: Record<string, any> = {};
+  // Basic fields
+  if (body.name !== undefined)    patch.name    = String(body.name).trim();
+  if (body.phone !== undefined)   patch.phone   = body.phone?.trim() || null;
+  if (body.address !== undefined) patch.address = body.address?.trim() || null;
+  // CRM fields
+  if (body.assigned_user_id !== undefined)  patch.assigned_user_id  = body.assigned_user_id  || null;
+  if (body.next_follow_up_at !== undefined) patch.next_follow_up_at = body.next_follow_up_at || null;
+  if (body.crm_status !== undefined)        patch.crm_status        = body.crm_status        || "active";
+  if (body.latitude !== undefined)          patch.latitude          = body.latitude  != null ? Number(body.latitude)  : null;
+  if (body.longitude !== undefined)         patch.longitude         = body.longitude != null ? Number(body.longitude) : null;
+
+  if (Object.keys(patch).length === 0)
+    return NextResponse.json({ error: "Không có field hợp lệ" }, { status: 400 });
+
   const { data, error } = await supabase
-    .from("customers")
-    .update({ name: name.trim(), phone: phone?.trim() || null, address: address?.trim() || null })
-    .eq("id", id)
-    .select("id, name, phone, address")
+    .from("customers").update(patch).eq("id", id)
+    .select("id, name, phone, address, assigned_user_id, next_follow_up_at, crm_status, latitude, longitude")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ data });

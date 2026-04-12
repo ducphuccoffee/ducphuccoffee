@@ -96,10 +96,10 @@ export default async function DashboardPage() {
     supabase.from("products").select("*", { count: "exact", head: true }),
     supabase.from("customers").select("*", { count: "exact", head: true }),
     supabase.from("orders").select("*", { count: "exact", head: true }),
-    supabase.from("batches").select("*", { count: "exact", head: true }),
+    supabase.from("roast_batches").select("*", { count: "exact", head: true }),
     supabase.from("orders").select("*", { count: "exact", head: true }).gte("created_at", startOfMonth),
     supabase.from("orders")
-      .select("id, code, customer_name, total_amount, status, created_at")
+      .select("id, order_code, customer_name, total_amount, status, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -186,7 +186,7 @@ export default async function DashboardPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-gray-800 truncate">
-                      {order.code || `#${order.id.slice(0, 8)}`}
+                      {order.order_code || `#${order.id.slice(0, 8)}`}
                     </p>
                     <p className="text-[11px] text-gray-400 truncate">{order.customer_name || "—"}</p>
                   </div>

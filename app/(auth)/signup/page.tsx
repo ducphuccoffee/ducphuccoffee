@@ -8,7 +8,6 @@ import { AuthCard } from "@/components/AuthCard";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export default function SignupPage() {
-  const supabase = createBrowserSupabaseClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -22,6 +21,7 @@ export default function SignupPage() {
     setSuccess(null);
     setLoading(true);
 
+    const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

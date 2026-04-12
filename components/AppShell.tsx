@@ -20,6 +20,9 @@ import {
   ChevronRight,
   Menu,
   X,
+  PieChart,
+  HeartHandshake,
+  Footprints,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -30,39 +33,41 @@ const NAV_GROUPS = [
     ],
   },
   {
-    group: "NHẬP HÀNG",
-    items: [
-      { href: "/inventory-in", label: "Nhập nguyên liệu", icon: PackagePlus },
-    ],
-  },
-  {
-    group: "SẢN XUẤT",
-    items: [
-      { href: "/batches", label: "Batch rang", icon: Factory },
-    ],
-  },
-  {
-    group: "SẢN PHẨM",
-    items: [
-      { href: "/products", label: "Danh mục SP", icon: Package },
-    ],
-  },
-  {
     group: "BÁN HÀNG",
     items: [
-      { href: "/orders",    label: "Đơn hàng",   icon: ShoppingCart },
-      { href: "/customers", label: "Khách hàng",  icon: Users },
-      { href: "/leads",    label: "CRM / Leads", icon: UserCheck },
-      { href: "/payments", label: "Thu tiền",    icon: CreditCard },
+      { href: "/orders",    label: "Đơn hàng",         icon: ShoppingCart },
+      { href: "/payments",  label: "Thu tiền",          icon: CreditCard },
+    ],
+  },
+  {
+    group: "CRM",
+    items: [
+      { href: "/crm/dashboard",    label: "CRM Dashboard",  icon: PieChart },
+      { href: "/crm/care",         label: "Customer Care",  icon: HeartHandshake },
+      { href: "/crm/sfa",          label: "SFA",            icon: Footprints },
+    ],
+  },
+  {
+    group: "NHẬP HÀNG / SX",
+    items: [
+      { href: "/inventory-in", label: "Nhập nguyên liệu", icon: PackagePlus },
+      { href: "/batches",      label: "Batch rang",        icon: Factory },
+    ],
+  },
+  {
+    group: "DANH MỤC",
+    items: [
+      { href: "/products",  label: "Sản phẩm",   icon: Package },
+      { href: "/customers", label: "Khách hàng", icon: Users },
+      { href: "/leads",     label: "Leads",      icon: UserCheck },
     ],
   },
   {
     group: "KHÁC",
     items: [
-      { href: "/commissions", label: "Hoa hồng",  icon: Award },
-      { href: "/checkins",    label: "Check-in",  icon: MapPin },
-      { href: "/reports",     label: "Báo cáo",   icon: BarChart2 },
-      { href: "/settings",    label: "Cài đặt",   icon: Settings },
+      { href: "/commissions", label: "Hoa hồng", icon: Award },
+      { href: "/reports",     label: "Báo cáo",  icon: BarChart2 },
+      { href: "/settings",    label: "Cài đặt",  icon: Settings },
     ],
   },
 ];
@@ -94,7 +99,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
             </p>
             <ul className="space-y-0.5">
               {items.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href;
+                const active = pathname === href || (href !== "/" && pathname.startsWith(href));
                 return (
                   <li key={href}>
                     <Link href={href}>
