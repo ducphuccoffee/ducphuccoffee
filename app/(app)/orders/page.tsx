@@ -4,18 +4,26 @@ import type { Product, Customer } from "@/components/orders/OrdersClient";
 
 export const dynamic = "force-dynamic";
 
+function makeOrderCode(id: string) {
+  return "#" + id.slice(0, 8).toUpperCase();
+}
+
+// Actual orders columns in DB (old schema):
+//   id, org_id, customer_id, status, total_qty_kg, total_amount,
+//   delivered_by, created_by, created_at, owner_user_id
+const SELECT_ORDERS = `
+  id, org_id, customer_id, status, total_qty_kg, total_amount, created_by, created_at,
+  customers(id, name, phone),
+  order_items(id, product_id, product_name, unit, qty, unit_price, subtotal)
+`.trim();
+
 export default async function OrdersPage() {
   const supabase = await createServerSupabaseClient();
 
   const [{ data: ordersRaw }, { data: productsRaw }, { data: customersRaw }] = await Promise.all([
     supabase
       .from("orders")
-      .select(`
-        id, org_id, customer_id, status, payment_status, payment_method,
-        total_qty_kg, total_amount, note, order_code, created_by, created_at,
-        customers(id, name, phone),
-        order_items(id, product_id, product_name, unit, qty, unit_price, subtotal)
-      `)
+      .select(SELECT_ORDERS)
       .order("created_at", { ascending: false })
       .limit(200),
     supabase.from("products").select("id, name, sku, unit, price").eq("is_active", true).order("name"),
@@ -23,10 +31,10 @@ export default async function OrdersPage() {
   ]);
 
   const products: Product[] = (productsRaw || []).map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    sku: p.sku ?? null,
-    unit: p.unit ?? "kg",
+    id:    p.id,
+    name:  p.name,
+    sku:   p.sku ?? null,
+    unit:  p.unit ?? "kg",
     price: Number(p.price) || 0,
   }));
 
@@ -36,17 +44,16 @@ export default async function OrdersPage() {
 
   const orders = (ordersRaw || []).map((o: any) => ({
     id:             o.id,
-    // Use stored order_code if available, otherwise derive from id
-    order_code:     o.order_code || `#${o.id.slice(0, 8).toUpperCase()}`,
+    order_code:     makeOrderCode(o.id),
     customer_id:    o.customer_id,
-    customer_name:  o.customers?.name ?? (o.customer_name ?? "—"),
+    customer_name:  o.customers?.name ?? "—",
     customer_phone: o.customers?.phone ?? null,
-    status:         o.status ?? "new",
-    payment_status: o.payment_status ?? "unpaid",
-    payment_method: o.payment_method ?? "cash",
+    status:         o.status ?? "draft",
+    payment_status: "unpaid",
+    payment_method: "cash",
     total_amount:   o.total_amount,
     total_qty_kg:   o.total_qty_kg,
-    note:           o.note ?? null,
+    note:           null,
     created_at:     o.created_at,
     order_items:    (o.order_items || []).map((it: any) => ({
       id:           it.id,

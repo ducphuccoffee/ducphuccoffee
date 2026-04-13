@@ -3,14 +3,10 @@ import { ReportsClient } from "@/components/reports/ReportsClient";
 
 export const dynamic = "force-dynamic";
 
-// Statuses that count as completed revenue
-// Rule: delivered + completed = doanh thu thực tế
-// new/accepted/preparing/ready_to_ship/shipping = đang xử lý, chưa tính doanh thu
-// cancelled/failed = không tính
-const REVENUE_STATUSES = ["delivered", "completed"];
-
-// Statuses that count for order count (accepted and above, excluding cancelled/failed)
-const COUNT_STATUSES = ["accepted", "preparing", "ready_to_ship", "shipping", "delivered", "completed"];
+// Revenue statuses in current DB (order_status enum: draft, confirmed, delivered, closed)
+const REVENUE_STATUSES = ["delivered", "closed"];
+// Orders that count toward order count (confirmed and above)
+const COUNT_STATUSES = ["confirmed", "delivered", "closed"];
 
 export default async function ReportsPage() {
   const supabase = await createServerSupabaseClient();
@@ -24,21 +20,21 @@ export default async function ReportsPage() {
     months.push({ label: `${d.getMonth() + 1}/${d.getFullYear()}`, from, to });
   }
 
-  // Fetch revenue orders (delivered + completed only)
+  // Fetch revenue orders
   const { data: revenueOrders } = await supabase
     .from("orders")
     .select("id, total_amount, status, created_at, customers(name)")
     .in("status", REVENUE_STATUSES)
     .order("created_at", { ascending: false });
 
-  // Fetch count orders (accepted and above)
+  // Fetch count orders
   const { data: countOrders } = await supabase
     .from("orders")
     .select("id, status, created_at")
     .in("status", COUNT_STATUSES)
     .order("created_at", { ascending: false });
 
-  // Fetch all non-cancelled orders for customer aggregation
+  // Fetch all revenue orders for customer aggregation
   const { data: allActiveOrders } = await supabase
     .from("orders")
     .select("id, total_amount, status, customers(name)")
@@ -48,11 +44,10 @@ export default async function ReportsPage() {
     .from("order_items")
     .select("product_name, qty, subtotal, order_id");
 
-  // Revenue orders mapped for top customer lookup
   const revenueOrderIds = new Set((revenueOrders || []).map((o: any) => o.id));
   const filteredItems = (topItems || []).filter((it: any) => revenueOrderIds.has(it.order_id));
 
-  // Group revenue by month (from revenue orders only)
+  // Group revenue by month
   const revenueByMonth: Record<string, number>    = {};
   const orderCountByMonth: Record<string, number> = {};
   for (const m of months) {
@@ -76,7 +71,7 @@ export default async function ReportsPage() {
     }
   }
 
-  // Top products by revenue (from revenue orders only)
+  // Top products by revenue
   const prodRevMap: Record<string, number> = {};
   const prodQtyMap: Record<string, number> = {};
   for (const it of filteredItems) {
@@ -89,7 +84,7 @@ export default async function ReportsPage() {
     .slice(0, 8)
     .map(([name, revenue]) => ({ name, revenue, qty: prodQtyMap[name] || 0 }));
 
-  // Top customers by revenue (use JOIN name from customers table)
+  // Top customers by revenue
   const custMap: Record<string, number> = {};
   for (const o of allActiveOrders || []) {
     const k = (o.customers as any)?.name || "Không rõ";
@@ -108,7 +103,7 @@ export default async function ReportsPage() {
       <div className="px-4 pt-5 pb-2">
         <h1 className="text-xl font-bold text-gray-800">Báo cáo</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          Doanh thu: tính từ đơn <strong>Đã giao + Hoàn thành</strong> · Số đơn: tính từ đơn đã tiếp nhận trở lên
+          Doanh thu: tính từ đơn <strong>Đã giao + Đã đóng</strong> · Số đơn: tính từ đơn đã xác nhận trở lên
         </p>
       </div>
       <ReportsClient

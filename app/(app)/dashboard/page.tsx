@@ -13,10 +13,6 @@ import {
   Banknote,
 } from "lucide-react";
 
-// Revenue statuses — đơn thực sự hoàn thành
-const REVENUE_STATUSES = ["delivered", "completed"];
-// Active statuses — đơn đang trong flow
-const ACTIVE_STATUSES = ["new", "accepted", "preparing", "ready_to_ship", "shipping", "delivered", "completed"];
 
 // ── Components ───────────────────────────────────────────────────
 interface StatCardProps {
@@ -106,6 +102,9 @@ export default async function DashboardPage() {
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
 
+  const recentOrderSelect = "id, status, total_amount, created_at, customers(name)";
+  const monthOrderSelect  = "id, status, total_amount";
+
   const [
     { data: { user } },
     { data: recentOrdersRaw },
@@ -117,18 +116,15 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.auth.getUser(),
 
-    // Recent 5 orders (any status)
     supabase.from("orders")
-      .select("id, order_code, status, payment_status, total_amount, created_at, customers(name)")
+      .select(recentOrderSelect)
       .order("created_at", { ascending: false })
       .limit(5),
 
-    // All orders this month (for financial + ops stats)
     supabase.from("orders")
-      .select("id, status, payment_status, total_amount")
+      .select(monthOrderSelect)
       .gte("created_at", monthStart),
 
-    // Orders today
     supabase.from("orders")
       .select("id, status, total_amount")
       .gte("created_at", todayStart),
@@ -138,7 +134,6 @@ export default async function DashboardPage() {
     supabase.from("roast_batches").select("*", { count: "exact", head: true }),
   ]);
 
-  // Resolve display name
   let displayName = "bạn";
   if (user) {
     const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
@@ -149,57 +144,48 @@ export default async function DashboardPage() {
   const monthOrders = allOrdersThisMonth || [];
   const todayOrders = ordersToday || [];
 
-  // Doanh thu = delivered + completed
+  // Revenue = delivered + closed (current DB enum values)
+  const revStatuses = ["delivered", "closed"];
+
   const revenueThisMonth = monthOrders
-    .filter((o: any) => REVENUE_STATUSES.includes(o.status))
+    .filter((o: any) => revStatuses.includes(o.status))
     .reduce((s: number, o: any) => s + (Number(o.total_amount) || 0), 0);
 
   const revenueToday = todayOrders
-    .filter((o: any) => REVENUE_STATUSES.includes(o.status))
+    .filter((o: any) => revStatuses.includes(o.status))
     .reduce((s: number, o: any) => s + (Number(o.total_amount) || 0), 0);
 
   const ordersCountToday = todayOrders.length;
   const ordersCountMonth = monthOrders.length;
 
   // ── Operational metrics ───────────────────────────────────────
-  const opsNew         = monthOrders.filter((o: any) => o.status === "new").length;
-  const opsPreparing   = monthOrders.filter((o: any) => ["accepted","preparing","ready_to_ship"].includes(o.status)).length;
-  const opsShipping    = monthOrders.filter((o: any) => o.status === "shipping").length;
-  const opsDelivered   = monthOrders.filter((o: any) => ["delivered","completed"].includes(o.status)).length;
-  const opsDebt        = monthOrders.filter((o: any) => o.payment_status === "debt").length;
+  const opsNew       = monthOrders.filter((o: any) => o.status === "draft").length;
+  const opsPreparing = monthOrders.filter((o: any) => o.status === "confirmed").length;
+  const opsShipping  = 0; // no shipping status in current schema
+  const opsDelivered = monthOrders.filter((o: any) => ["delivered", "closed"].includes(o.status)).length;
+  const opsDebt      = 0; // no payment_status column yet
 
   const todayStr = today.toLocaleDateString("vi-VN", {
     weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
   });
 
-  // Recent orders display
   const recentOrders = (recentOrdersRaw || []).map((o: any) => ({
     ...o,
-    order_code:    o.order_code || `#${o.id.slice(0, 8).toUpperCase()}`,
+    order_code:    `#${o.id.slice(0, 8).toUpperCase()}`,
     customer_name: (o.customers as any)?.name || "—",
   }));
 
   const ORDER_STATUS_LABEL: Record<string, string> = {
-    new:           "Mới tạo",
-    accepted:      "Đã tiếp nhận",
-    preparing:     "Đang chuẩn bị",
-    ready_to_ship: "Sẵn sàng giao",
-    shipping:      "Đang giao",
-    delivered:     "Đã giao",
-    completed:     "Hoàn thành",
-    cancelled:     "Đã hủy",
-    failed:        "Giao thất bại",
+    draft:     "Nháp",
+    confirmed: "Đã xác nhận",
+    delivered: "Đã giao",
+    closed:    "Đã đóng",
   };
   const ORDER_STATUS_COLOR: Record<string, string> = {
-    new:           "bg-sky-100 text-sky-700",
-    accepted:      "bg-blue-100 text-blue-700",
-    preparing:     "bg-amber-100 text-amber-700",
-    ready_to_ship: "bg-orange-100 text-orange-700",
-    shipping:      "bg-purple-100 text-purple-700",
-    delivered:     "bg-green-100 text-green-700",
-    completed:     "bg-emerald-100 text-emerald-700",
-    cancelled:     "bg-red-100 text-red-600",
-    failed:        "bg-rose-100 text-rose-700",
+    draft:     "bg-gray-100 text-gray-500",
+    confirmed: "bg-blue-100 text-blue-700",
+    delivered: "bg-green-100 text-green-700",
+    closed:    "bg-emerald-100 text-emerald-700",
   };
 
   return (

@@ -8,27 +8,17 @@ const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
-  new:           "Mới tạo",
-  accepted:      "Đã tiếp nhận",
-  preparing:     "Đang chuẩn bị",
-  ready_to_ship: "Sẵn sàng giao",
-  shipping:      "Đang giao",
-  delivered:     "Đã giao",
-  completed:     "Hoàn thành",
-  cancelled:     "Đã hủy",
-  failed:        "Giao thất bại",
+  draft:     "Nháp",
+  confirmed: "Đã xác nhận",
+  delivered: "Đã giao",
+  closed:    "Đã đóng",
 };
 
 export const ORDER_STATUS_COLOR: Record<string, string> = {
-  new:           "bg-sky-100 text-sky-700",
-  accepted:      "bg-blue-100 text-blue-700",
-  preparing:     "bg-amber-100 text-amber-700",
-  ready_to_ship: "bg-orange-100 text-orange-700",
-  shipping:      "bg-purple-100 text-purple-700",
-  delivered:     "bg-green-100 text-green-700",
-  completed:     "bg-emerald-100 text-emerald-700",
-  cancelled:     "bg-red-100 text-red-600",
-  failed:        "bg-rose-100 text-rose-700",
+  draft:     "bg-gray-100 text-gray-600",
+  confirmed: "bg-blue-100 text-blue-700",
+  delivered: "bg-green-100 text-green-700",
+  closed:    "bg-emerald-100 text-emerald-700",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -296,14 +286,8 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
     if (detailOrder?.id === id) setDetailOrder((o) => o ? { ...o, status } : o);
   }
 
-  async function handlePaymentStatusChange(id: string, payment_status: string) {
-    const res = await fetch(`/api/orders?id=${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payment_status }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.error) { alert(json.error ?? "Lỗi cập nhật"); return; }
+  // Payment status is local-only until DB schema is extended with payment columns
+  function handlePaymentStatusChange(id: string, payment_status: string) {
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, payment_status } : o));
     if (detailOrder?.id === id) setDetailOrder((o) => o ? { ...o, payment_status } : o);
   }
