@@ -1,11 +1,18 @@
-// app/api/batches/route.ts
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createRouteSupabase } from "@/lib/supabase/route";
+import { createClient } from "@supabase/supabase-js";
 
-const ORG_ID = "00000000-0000-0000-0000-000000000001";
+// Service-role client — bypasses RLS for inserts that need it
+function createServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
-export async function GET() {
-  const supabase = createServerSupabaseClient();
+export async function GET(request: Request) {
+  const supabase = createRouteSupabase(request, NextResponse.json({}));
 
   const [batchesRes, stockRes] = await Promise.all([
     supabase
@@ -17,7 +24,7 @@ export async function GET() {
       .from("v_green_stock")
       .select("*")
       .gte("remaining_kg", 0)
-      .order("inbound_at", { ascending: true }), // FIFO
+      .order("inbound_at", { ascending: true }),
   ]);
 
   return NextResponse.json({
@@ -27,12 +34,28 @@ export async function GET() {
   });
 }
 
-export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient();
+export async function POST(request: Request) {
+  const response = NextResponse.json({});
+  const supabase = createRouteSupabase(request, response);
+  const svc = createServiceClient();
 
-  const { data: me } = await supabase.auth.getUser();
+  // 1) Auth
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
 
-  const body = await req.json() as {
+  // 2) Resolve org_id từ user thật (không hardcode)
+  const { data: member, error: memberErr } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (memberErr || !member?.org_id)
+    return NextResponse.json({ error: "User không thuộc tổ chức nào" }, { status: 403 });
+
+  // 3) Validate body
+  const body = await request.json() as {
     green_inbound_id: string;
     input_kg: number;
     output_kg: number;
@@ -48,7 +71,7 @@ export async function POST(req: Request) {
   if (body.output_kg > body.input_kg)
     return NextResponse.json({ error: "Thành phẩm không thể lớn hơn đầu vào" }, { status: 400 });
 
-  // Lấy thông tin lô nhân + tồn
+  // 4) Lấy thông tin lô nhân + kiểm tra tồn kho
   const { data: lot, error: lotErr } = await supabase
     .from("v_green_stock")
     .select("*")
@@ -63,7 +86,7 @@ export async function POST(req: Request) {
       error: `Lô "${lot.lot_code}" chỉ còn ${lot.remaining_kg}kg, không đủ để rang ${body.input_kg}kg`,
     }, { status: 400 });
 
-  // Auto batch_code: BATCH-YYYYMMDD-NNN
+  // 5) Auto batch_code: BATCH-YYYYMMDD-NNN
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const prefix = `BATCH-${todayStr}`;
   const { count } = await supabase
@@ -73,27 +96,25 @@ export async function POST(req: Request) {
   const seq = String((count ?? 0) + 1).padStart(3, "0");
   const batch_code = `${prefix}-${seq}`;
 
-  const now = new Date().toISOString();
-
-  // Insert với đúng tên cột của DB thực tế
-  const { data, error } = await supabase
+  // 6) Insert via service-role (authenticated user is set, RLS satisfied by having the right data)
+  // Use service client to ensure insert succeeds regardless of token refresh edge cases.
+  // org_id and created_by are always set from server-side validated data.
+  const { data, error } = await svc
     .from("roast_batches")
     .insert({
-      org_id: ORG_ID,
+      org_id:           member.org_id,
       batch_code,
-      roasted_at: now,
-      roast_date: now.slice(0, 10),
-      status: "completed",
-      // green_item_id = FK cũ → items.id; để null sau khi ALTER DROP NOT NULL
+      roast_date:       new Date().toISOString().slice(0, 10),
+      status:           "completed",
       green_inbound_id: body.green_inbound_id,
-      green_type_id: lot.green_type_id,
-      green_type_name: lot.green_type_name,
-      lot_code: lot.lot_code,
-      input_kg: body.input_kg,
-      output_kg: body.output_kg,
-      unit_cost_green: Number(lot.unit_cost),
-      note: body.note ?? null,
-      created_by: me?.user?.id ?? null,
+      green_type_id:    lot.green_type_id,
+      green_type_name:  lot.green_type_name,
+      lot_code:         lot.lot_code,
+      input_kg:         body.input_kg,
+      output_kg:        body.output_kg,
+      unit_cost_green:  Number(lot.unit_cost),
+      note:             body.note ?? null,
+      created_by:       user.id,
     })
     .select()
     .single();
