@@ -1,12 +1,12 @@
 import { TopBar } from "@/components/TopBar";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { InventoryInClient } from "@/components/inventory/InventoryInClient";
-import type { GreenInbound, GreenType } from "@/components/inventory/InventoryInClient";
+import type { GreenInbound, GreenType, Supplier } from "@/components/inventory/InventoryInClient";
 
 export default async function Page() {
   const supabase = await createServerSupabaseClient();
 
-  const [inboundsRes, typesRes] = await Promise.all([
+  const [inboundsRes, typesRes, suppliersRes] = await Promise.all([
     supabase
       .from("v_green_stock")
       .select("*")
@@ -15,6 +15,11 @@ export default async function Page() {
     supabase
       .from("green_types")
       .select("id, name")
+      .order("name"),
+    supabase
+      .from("suppliers")
+      .select("id, name")
+      .eq("is_active", true)
       .order("name"),
   ]);
 
@@ -28,9 +33,12 @@ export default async function Page() {
     unit_cost: Number(r.unit_cost ?? 0),
     line_total: Number(r.original_qty_kg ?? 0) * Number(r.unit_cost ?? 0),
     remaining_kg: Number(r.remaining_kg ?? 0),
+    supplier_id: r.supplier_id ?? null,
+    supplier_name: r.supplier_name ?? null,
   })) as GreenInbound[];
 
   const greenTypes = (typesRes.data ?? []) as GreenType[];
+  const suppliers = (suppliersRes.data ?? []) as Supplier[];
 
   const error = inboundsRes.error?.message ?? typesRes.error?.message ?? null;
 
@@ -43,6 +51,7 @@ export default async function Page() {
       <InventoryInClient
         initialInbounds={inbounds}
         initialGreenTypes={greenTypes}
+        initialSuppliers={suppliers}
         error={error}
       />
     </div>
