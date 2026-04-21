@@ -69,7 +69,9 @@ export async function GET(request: Request) {
         price: p.price,
         unit: p.unit,
         sellable_kg: Math.round(remaining * 100) / 100,
+        green_type_id: gtId,
         limiting_factor: remaining < LOW_SELLABLE_KG ? (stockMap[gtId]?.name ?? gtId) : null,
+        limiting_green_type_id: remaining < LOW_SELLABLE_KG ? gtId : null,
         low_stock: remaining < LOW_SELLABLE_KG,
       };
     }
@@ -80,6 +82,8 @@ export async function GET(request: Request) {
 
       let minPossible = Infinity;
       let limitingGreenType: string | null = null;
+      let limitingGreenTypeId: string | null = null;
+      let limitingRatio = 1;
 
       for (const line of lines) {
         const remaining = stockMap[line.green_type_id]?.remaining ?? 0;
@@ -87,6 +91,8 @@ export async function GET(request: Request) {
         if (possible < minPossible) {
           minPossible = possible;
           limitingGreenType = stockMap[line.green_type_id]?.name ?? line.green_type_id;
+          limitingGreenTypeId = line.green_type_id;
+          limitingRatio = line.ratio;
         }
       }
 
@@ -99,6 +105,8 @@ export async function GET(request: Request) {
         unit: p.unit,
         sellable_kg: sellable,
         limiting_factor: sellable < LOW_SELLABLE_KG ? limitingGreenType : null,
+        limiting_green_type_id: sellable < LOW_SELLABLE_KG ? limitingGreenTypeId : null,
+        limiting_ratio: sellable < LOW_SELLABLE_KG ? limitingRatio : null,
         low_stock: sellable < LOW_SELLABLE_KG,
       };
     }
