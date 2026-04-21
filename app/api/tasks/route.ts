@@ -190,6 +190,20 @@ export async function PATCH(request: Request) {
     if (newOrderStatus && task.ref_id && task.ref_type === "order")
       await svc().from("orders").update({ status: newOrderStatus }).eq("id", task.ref_id);
 
+    // Stock deduction when order confirmed (confirm_order → accepted)
+    if (task.type === "confirm_order" && task.ref_id) {
+      const { error: deductErr } = await svc().rpc("apply_stock_deduction", { p_order_id: task.ref_id });
+      if (deductErr) {
+        console.error("[tasks] stock deduction failed:", deductErr.message);
+        // Rollback: revert task and order status
+        await svc().from("tasks").update({ status: "in_progress" }).eq("id", id);
+        await svc().from("orders").update({ status: "new" }).eq("id", task.ref_id);
+        return NextResponse.json({
+          error: `Không đủ tồn kho rang nền: ${deductErr.message}`,
+        }, { status: 400 });
+      }
+    }
+
     const nextType = NEXT_TASK_TYPE[task.type];
     if (nextType && task.ref_id) {
       const { error: nextErr } = await svc().from("tasks").insert({

@@ -105,16 +105,7 @@ export async function POST(request: Request) {
   const cost_per_kg  = output_kg > 0 ? Math.round((input_kg * unit_cost) / output_kg) : 0;
   const cost_total   = cost_per_kg * output_kg;
 
-  // 7) Find matching product by green_type_id (kind = 'original')
-  const { data: matchedProduct } = await svc
-    .from("products")
-    .select("id")
-    .eq("green_type_id", lot.green_type_id)
-    .eq("kind", "original")
-    .limit(1)
-    .maybeSingle();
-
-  // 8) Insert batch + product_stock in sequence (service role = no RLS issues)
+  // 7) Insert batch
   const { data, error } = await svc
     .from("roast_batches")
     .insert({
@@ -141,21 +132,29 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // 9) Insert product_stock if product matched
-  if (matchedProduct?.id) {
-    const { error: stockErr } = await svc
-      .from("product_stock")
-      .insert({
-        org_id:      member.org_id,
-        product_id:  matchedProduct.id,
-        batch_id:    data.id,
-        qty_kg:      output_kg,
-        cost_per_kg: cost_per_kg,
-      });
-    if (stockErr) {
-      console.error("[batches] product_stock insert failed:", stockErr.message);
-    }
+  // 7) Insert roasted_stock_lot for finished goods tracking
+  const { error: rstErr } = await svc
+    .from("roasted_stock_lots")
+    .insert({
+      org_id:        member.org_id,
+      green_type_id: lot.green_type_id,
+      batch_id:      data.id,
+      qty_kg:        output_kg,
+      remaining_kg:  output_kg,
+      cost_per_kg:   cost_per_kg,
+    });
+  if (rstErr) {
+    console.error("[batches] roasted_stock_lots insert failed:", rstErr.message);
   }
+
+  // Log stock movement
+  const { error: _mvErr } = await svc.from("stock_movements").insert({
+    org_id:        member.org_id,
+    green_type_id: lot.green_type_id,
+    movement_type: "production_in",
+    qty_kg:        output_kg,
+  });
+  if (_mvErr) console.error("[batches] stock_movement log failed:", _mvErr.message);
 
   return NextResponse.json({ ok: true, data });
 }
