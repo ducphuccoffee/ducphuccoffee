@@ -13,6 +13,7 @@ type KPI = {
   order_revenue: number;
   visits_today: number;
   calls_today: number;
+  predicted_revenue: number;
 };
 
 type Pipeline = Record<string, { count: number; value: number }>;
@@ -26,6 +27,22 @@ type Task = {
   customer_id: string | null;
   due_at: string | null;
   created_at: string;
+};
+
+type Alert = {
+  type: string;
+  message: string;
+  severity: "high" | "medium";
+};
+
+type LeadScore = {
+  lead_id: string;
+  name: string;
+  phone: string | null;
+  score: number;
+  level: string;
+  next_action: string;
+  priority: string;
 };
 
 const money = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
@@ -49,19 +66,25 @@ export function CrmDashboardClient() {
   const [kpi, setKpi] = useState<KPI | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline>({});
   const [tasks, setTasks] = useState<{ overdue: Task[]; today: Task[]; upcoming: Task[] }>({ overdue: [], today: [], upcoming: [] });
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [topLeads, setTopLeads] = useState<LeadScore[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/crm-dashboard")
-      .then(r => r.json())
-      .then(res => {
-        if (res.ok) {
-          setKpi(res.data.kpi);
-          setPipeline(res.data.pipeline);
-          setTasks(res.data.tasks);
-        }
-      })
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/crm-dashboard").then(r => r.json()),
+      fetch("/api/lead-scoring").then(r => r.json()),
+    ]).then(([dash, scoring]) => {
+      if (dash.ok) {
+        setKpi(dash.data.kpi);
+        setPipeline(dash.data.pipeline);
+        setTasks(dash.data.tasks);
+        setAlerts(dash.data.alerts ?? []);
+      }
+      if (scoring.ok) {
+        setTopLeads((scoring.data ?? []).slice(0, 5));
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -80,8 +103,66 @@ export function CrmDashboardClient() {
         <KPICard icon={<Users className="h-4 w-4" />} label="Lead tháng này" value={kpi.total_leads} sub={`${kpi.converted_leads} converted`} />
         <KPICard icon={<Target className="h-4 w-4" />} label="Cơ hội" value={kpi.total_opportunities} sub={`${kpi.won_deals} thắng`} />
         <KPICard icon={<TrendingUp className="h-4 w-4" />} label="Doanh thu tháng" value={money(kpi.order_revenue)} sub="đ" isText />
-        <KPICard icon={<Briefcase className="h-4 w-4" />} label="Hôm nay" value={`${kpi.visits_today} visit · ${kpi.calls_today} call`} isText />
+        <KPICard icon={<Briefcase className="h-4 w-4" />} label="Dự báo pipeline" value={money(kpi.predicted_revenue)} sub="đ" isText />
       </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border bg-white p-3 text-center">
+          <div className="text-[10px] text-gray-400 uppercase">Visit hôm nay</div>
+          <div className="text-2xl font-bold text-gray-800">{kpi.visits_today}</div>
+        </div>
+        <div className="rounded-xl border bg-white p-3 text-center">
+          <div className="text-[10px] text-gray-400 uppercase">Call hôm nay</div>
+          <div className="text-2xl font-bold text-gray-800">{kpi.calls_today}</div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {alerts.length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <span className="text-sm font-bold text-red-800">Cảnh báo ({alerts.length})</span>
+          </div>
+          <div className="space-y-1">
+            {alerts.map((a, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className={`text-xs px-1 py-0.5 rounded ${a.severity === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                  {a.severity === "high" ? "Cao" : "TB"}
+                </span>
+                <span className="text-gray-700">{a.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top leads */}
+      {topLeads.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-3 py-2.5 border-b bg-gray-50">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Top Lead (scoring)</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {topLeads.map(l => (
+              <div key={l.lead_id} className="px-3 py-2 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      l.level === "hot" ? "bg-red-100 text-red-700" : l.level === "warm" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                    }`}>{l.score}</span>
+                    <span className="text-sm font-medium text-gray-800 truncate">{l.name}</span>
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-0.5 truncate">{l.next_action}</div>
+                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                  l.priority === "high" ? "bg-red-100 text-red-700" : l.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                }`}>{l.priority}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Overdue tasks alert */}
       {tasks.overdue.length > 0 && (

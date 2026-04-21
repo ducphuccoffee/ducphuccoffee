@@ -92,6 +92,48 @@ export async function GET(request: Request) {
     else upcoming.push(t);
   }
 
+  // Revenue prediction from pipeline
+  const STAGE_PROBABILITY: Record<string, number> = {
+    new: 0.1, consulting: 0.2, demo: 0.4, quoted: 0.6, negotiating: 0.8,
+  };
+  let predictedRevenue = 0;
+  for (const opp of oppsRes.data ?? []) {
+    const prob = STAGE_PROBABILITY[opp.stage] ?? 0;
+    predictedRevenue += Number(opp.expected_value ?? 0) * prob;
+  }
+
+  // Alerts
+  const alerts: { type: string; message: string; severity: "high" | "medium" }[] = [];
+
+  // High-value lead inactive: any lead with opp value >= 5M and no activity 5 days
+  // (need additional query)
+  const fiveDaysAgo = new Date(now.getTime() - 5 * 86_400_000).toISOString();
+  const { data: staleHighLeads } = await supabase
+    .from("leads")
+    .select("id, name")
+    .eq("org_id", orgId)
+    .not("status", "in", "(converted,lost)")
+    .lt("updated_at", fiveDaysAgo)
+    .limit(10);
+
+  for (const lead of staleHighLeads ?? []) {
+    alerts.push({ type: "stale_lead", message: `Lead "${lead.name}" không hoạt động > 5 ngày`, severity: "medium" });
+  }
+
+  // Big opportunity stuck
+  const { data: bigStuckOpps } = await supabase
+    .from("opportunities")
+    .select("id, title, expected_value, stage")
+    .eq("org_id", orgId)
+    .in("stage", ["quoted", "negotiating"])
+    .gte("expected_value", 5_000_000)
+    .lt("updated_at", fiveDaysAgo)
+    .limit(10);
+
+  for (const opp of bigStuckOpps ?? []) {
+    alerts.push({ type: "stuck_opp", message: `Cơ hội "${opp.title}" (${Math.round(Number(opp.expected_value) / 1_000_000)}M) đang kẹt`, severity: "high" });
+  }
+
   return NextResponse.json({
     ok: true,
     data: {
@@ -104,9 +146,11 @@ export async function GET(request: Request) {
         order_revenue: orderRevenue,
         visits_today: visitsToday,
         calls_today: callsToday,
+        predicted_revenue: Math.round(predictedRevenue),
       },
       pipeline,
       tasks: { overdue, today, upcoming },
+      alerts,
     },
   });
 }
