@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatWeekdayDateVN } from "@/lib/date";
 import TaskBoard from "@/components/dashboard/TaskBoard";
+import { StockDashboard } from "@/components/dashboard/StockDashboard";
 import {
   Package,
   Users,
@@ -315,6 +316,12 @@ export default async function DashboardPage() {
           <QuickAction href="/batches"    label="Tạo batch rang"   desc="Ghi lại mẻ sản xuất"   icon={Factory}      color="bg-amber-500" />
           <QuickAction href="/products"   label="Thêm sản phẩm"   desc="Cập nhật danh mục"     icon={Package}      color="bg-green-500" />
         </div>
+      </div>
+
+      {/* Stock dashboard */}
+      <div>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Tồn kho & Sản xuất</p>
+        <StockDashboard />
       </div>
 
       {/* Task board */}
