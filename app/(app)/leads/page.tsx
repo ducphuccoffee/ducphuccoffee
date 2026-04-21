@@ -1,9 +1,15 @@
+import { TopBar } from "@/components/TopBar";
+import { LeadsClient } from "@/components/crm/LeadsClient";
+
+export const dynamic = "force-dynamic";
+
 export default function LeadsPage() {
   return (
-    <div className="p-8 text-center">
-      <div className="text-5xl mb-4">🎯</div>
-      <h1 className="text-2xl font-bold text-gray-700">CRM / Leads</h1>
-      <p className="text-gray-400 mt-2">Tính năng đang phát triển</p>
+    <div>
+      <TopBar title="Leads" subtitle="Quản lý khách hàng tiềm năng" section="CRM" />
+      <div className="p-4">
+        <LeadsClient />
+      </div>
     </div>
   );
 }
