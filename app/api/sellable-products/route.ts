@@ -41,18 +41,18 @@ export async function GET(request: Request) {
     };
   }
 
-  // 3) Recipe lines for blends
+  // 3) Recipe lines for blends (use product_formulas with ratio_pct)
   const blendIds = (products ?? []).filter((p: any) => p.kind === "blend").map((p: any) => p.id);
   let recipeMap: Record<string, { green_type_id: string; ratio: number }[]> = {};
 
   if (blendIds.length > 0) {
     const { data: recipes } = await supabase
-      .from("product_recipe_lines")
-      .select("product_id, green_type_id, ratio")
+      .from("product_formulas")
+      .select("product_id, green_type_id, ratio_pct")
       .in("product_id", blendIds);
     for (const r of recipes ?? []) {
       if (!recipeMap[r.product_id]) recipeMap[r.product_id] = [];
-      recipeMap[r.product_id].push({ green_type_id: r.green_type_id, ratio: Number(r.ratio) });
+      recipeMap[r.product_id].push({ green_type_id: r.green_type_id, ratio: Number(r.ratio_pct) / 100 });
     }
   }
 
