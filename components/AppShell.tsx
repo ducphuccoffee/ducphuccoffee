@@ -23,6 +23,7 @@ import {
   PieChart,
   HeartHandshake,
   Footprints,
+  Target,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -42,9 +43,10 @@ const NAV_GROUPS = [
   {
     group: "CRM",
     items: [
-      { href: "/crm/dashboard",    label: "CRM Dashboard",  icon: PieChart },
-      { href: "/crm/care",         label: "Customer Care",  icon: HeartHandshake },
-      { href: "/crm/sfa",          label: "SFA",            icon: Footprints },
+      { href: "/crm/dashboard",       label: "CRM Dashboard",  icon: PieChart },
+      { href: "/crm/opportunities",   label: "Cơ hội",         icon: Target },
+      { href: "/crm/care",            label: "Customer Care",  icon: HeartHandshake },
+      { href: "/crm/sfa",             label: "SFA",            icon: Footprints },
     ],
   },
   {
