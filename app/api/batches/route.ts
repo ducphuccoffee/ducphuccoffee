@@ -96,9 +96,25 @@ export async function POST(request: Request) {
   const seq = String((count ?? 0) + 1).padStart(3, "0");
   const batch_code = `${prefix}-${seq}`;
 
-  // 6) Insert via service-role (authenticated user is set, RLS satisfied by having the right data)
-  // Use service client to ensure insert succeeds regardless of token refresh edge cases.
-  // org_id and created_by are always set from server-side validated data.
+  // 6) Calculate cost fields correctly
+  const input_kg  = body.input_kg;
+  const output_kg = body.output_kg;
+  const unit_cost = Number(lot.unit_cost);
+  const loss_kg      = input_kg - output_kg;
+  const loss_percent = input_kg > 0 ? Math.round(((loss_kg / input_kg) * 100) * 100) / 100 : 0;
+  const cost_per_kg  = output_kg > 0 ? Math.round((input_kg * unit_cost) / output_kg) : 0;
+  const cost_total   = cost_per_kg * output_kg;
+
+  // 7) Find matching product by green_type_id (kind = 'original')
+  const { data: matchedProduct } = await svc
+    .from("products")
+    .select("id")
+    .eq("green_type_id", lot.green_type_id)
+    .eq("kind", "original")
+    .limit(1)
+    .maybeSingle();
+
+  // 8) Insert batch + product_stock in sequence (service role = no RLS issues)
   const { data, error } = await svc
     .from("roast_batches")
     .insert({
@@ -110,9 +126,13 @@ export async function POST(request: Request) {
       green_type_id:    lot.green_type_id,
       green_type_name:  lot.green_type_name,
       lot_code:         lot.lot_code,
-      input_kg:         body.input_kg,
-      output_kg:        body.output_kg,
-      unit_cost_green:  Number(lot.unit_cost),
+      input_kg,
+      output_kg,
+      loss_kg,
+      loss_percent,
+      unit_cost_green:  unit_cost,
+      cost_per_kg,
+      cost_total,
       note:             body.note ?? null,
       created_by:       user.id,
     })
@@ -120,5 +140,22 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // 9) Insert product_stock if product matched
+  if (matchedProduct?.id) {
+    const { error: stockErr } = await svc
+      .from("product_stock")
+      .insert({
+        org_id:      member.org_id,
+        product_id:  matchedProduct.id,
+        batch_id:    data.id,
+        qty_kg:      output_kg,
+        cost_per_kg: cost_per_kg,
+      });
+    if (stockErr) {
+      console.error("[batches] product_stock insert failed:", stockErr.message);
+    }
+  }
+
   return NextResponse.json({ ok: true, data });
 }
