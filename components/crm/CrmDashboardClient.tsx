@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatDateVN } from "@/lib/date";
 import { AlertTriangle, CheckCircle, Phone, MapPin, TrendingUp, Users, Target, Briefcase } from "lucide-react";
+import Link from "next/link";
 
 type KPI = {
   total_leads: number;
@@ -117,6 +118,15 @@ export function CrmDashboardClient() {
 
   return (
     <div className="space-y-4">
+
+      {/* Quick links */}
+      <div className="flex gap-2 flex-wrap">
+        <QuickLink href="/leads" label="Tạo lead" />
+        <QuickLink href="/crm/opportunities" label="Tạo cơ hội" />
+        <QuickLink href="/crm/activities" label="Ghi hoạt động" />
+        <QuickLink href="/crm/sfa" label="Check-in visit" />
+        <QuickLink href="/crm/followups" label="Follow-ups" />
+      </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -295,6 +305,12 @@ export function CrmDashboardClient() {
         </div>
       )}
     </div>
+  );
+}
+
+function QuickLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} className="px-3 py-1.5 border rounded-lg text-xs text-blue-600 font-medium hover:bg-blue-50">{label}</Link>
   );
 }
 
