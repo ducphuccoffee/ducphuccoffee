@@ -142,12 +142,15 @@ export async function POST(request: Request) {
   }
 
   // Create confirm_order task for this order
+  const taskRole = "warehouse";
   const { error: taskErr } = await svc.from("tasks").insert({
     org_id:     member.org_id,
     type:       "confirm_order",
     status:     "todo",
     ref_id:     order.id,
     ref_type:   "order",
+    role:       taskRole,
+    order_id:   order.id,
     created_by: user.id,
   });
   if (taskErr) console.error("[orders] confirm_order task insert failed:", taskErr.message);

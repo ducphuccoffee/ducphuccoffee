@@ -10,7 +10,14 @@ function svc() {
   );
 }
 
-const TASK_ROLES: Record<string, string[]> = {
+const TASK_DEFAULT_ROLE: Record<string, string> = {
+  confirm_order: "warehouse",
+  prepare_order: "warehouse",
+  deliver_order: "shipper",
+  close_order:   "manager",
+};
+
+const TASK_ALLOWED_ROLES: Record<string, string[]> = {
   confirm_order: ["admin", "manager", "warehouse"],
   prepare_order: ["admin", "manager", "warehouse"],
   deliver_order: ["admin", "manager", "warehouse", "shipper"],
@@ -56,7 +63,7 @@ export async function GET(request: Request) {
   let q = svc()
     .from("tasks")
     .select(`
-      id, org_id, type, status, ref_id, ref_type, assigned_to, created_by, created_at
+      id, org_id, type, status, role, ref_id, ref_type, order_id, assigned_to, created_by, created_at
     `)
     .eq("org_id", member.org_id)
     .in("status", ["todo", "in_progress"])
@@ -71,7 +78,10 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   const tasksArr = data || [];
-  const orderIds = [...new Set(tasksArr.filter((t: any) => t.ref_type === "order" && t.ref_id).map((t: any) => t.ref_id))];
+  const orderIds = [...new Set(tasksArr
+    .filter((t: any) => t.ref_type === "order" && (t.ref_id || t.order_id))
+    .map((t: any) => t.order_id || t.ref_id)
+  )];
 
   let ordersMap: Record<string, any> = {};
   if (orderIds.length > 0) {
@@ -94,7 +104,9 @@ export async function GET(request: Request) {
 
   const enriched = tasksArr.map((t: any) => ({
     ...t,
-    orders: t.ref_type === "order" && t.ref_id ? (ordersMap[t.ref_id] ?? null) : null,
+    orders: (t.ref_type === "order" && (t.order_id || t.ref_id))
+      ? (ordersMap[t.order_id || t.ref_id] ?? null)
+      : null,
   }));
 
   return NextResponse.json({ data: enriched });
@@ -128,14 +140,14 @@ export async function PATCH(request: Request) {
 
   const { data: task, error: taskErr } = await svc()
     .from("tasks")
-    .select("id, org_id, type, status, ref_id, ref_type, assigned_to")
+    .select("id, org_id, type, status, role, ref_id, ref_type, order_id, assigned_to")
     .eq("id", id)
     .eq("org_id", member.org_id)
     .single();
   if (taskErr || !task)
     return NextResponse.json({ error: "Không tìm thấy task" }, { status: 404 });
 
-  const allowedRoles   = TASK_ROLES[task.type] ?? ["admin", "manager"];
+  const allowedRoles   = TASK_ALLOWED_ROLES[task.type] ?? ["admin", "manager"];
   const isAdminManager = ["admin", "manager"].includes(member.role);
 
   if (!allowedRoles.includes(member.role))
@@ -180,14 +192,17 @@ export async function PATCH(request: Request) {
 
     const nextType = NEXT_TASK_TYPE[task.type];
     if (nextType && task.ref_id) {
-      await svc().from("tasks").insert({
+      const { error: nextErr } = await svc().from("tasks").insert({
         org_id:     member.org_id,
         type:       nextType,
         status:     "todo",
+        role:       TASK_DEFAULT_ROLE[nextType] ?? "warehouse",
         ref_id:     task.ref_id,
         ref_type:   "order",
+        order_id:   task.ref_id,
         created_by: user.id,
       });
+      if (nextErr) console.error("[tasks] next task insert failed:", nextErr.message);
     }
 
     return NextResponse.json({ ok: true, next_task: nextType ?? null });
