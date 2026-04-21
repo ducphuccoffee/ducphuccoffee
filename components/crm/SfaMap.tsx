@@ -6,7 +6,7 @@ import { formatDateTimeVN } from "@/lib/date";
 
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import type { CustomerPin, Visit } from "./SfaClient";
+import type { CustomerPin } from "./SfaClient";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -28,7 +28,17 @@ const visitIcon = new L.Icon({
   className:   "hue-rotate-[120deg]", // green tint for visit markers
 });
 
-export default function SfaMap({ customers, visits }: { customers: CustomerPin[]; visits: Visit[] }) {
+export interface MapVisit {
+  id: string;
+  customer_id: string | null;
+  customer_name: string;
+  checkin_lat: number | null;
+  checkin_lng: number | null;
+  checkin_at: string;
+  note: string | null;
+}
+
+export default function SfaMap({ customers, visits }: { customers: CustomerPin[]; visits: MapVisit[] }) {
   // Default center: Ho Chi Minh City
   const center: [number, number] = customers.length > 0 && customers[0].latitude
     ? [customers[0].latitude, customers[0].longitude!]
@@ -37,7 +47,7 @@ export default function SfaMap({ customers, visits }: { customers: CustomerPin[]
   // Build a set of customers that have recent visits (last 7 days)
   const recentVisitCustomerIds = new Set(
     visits
-      .filter(v => v.check_in_lat != null && new Date(v.check_in_time).getTime() > Date.now() - 7 * 86400_000)
+      .filter(v => v.checkin_lat != null && new Date(v.checkin_at).getTime() > Date.now() - 7 * 86400_000)
       .map(v => v.customer_id)
   );
 
@@ -70,12 +80,12 @@ export default function SfaMap({ customers, visits }: { customers: CustomerPin[]
 
       {/* Visit check-in pins */}
       {visits
-        .filter(v => v.check_in_lat != null && v.check_in_lng != null)
+        .filter(v => v.checkin_lat != null && v.checkin_lng != null)
         .map(v => (
-          <Marker key={`visit-${v.id}`} position={[v.check_in_lat!, v.check_in_lng!]} icon={visitIcon}>
+          <Marker key={`visit-${v.id}`} position={[v.checkin_lat!, v.checkin_lng!]} icon={visitIcon}>
             <Popup>
               📍 <strong>Check-in: {v.customer_name}</strong><br />
-              {formatDateTimeVN(v.check_in_time)}<br />
+              {formatDateTimeVN(v.checkin_at)}<br />
               {v.note ? <em>{v.note}</em> : ""}
             </Popup>
           </Marker>
