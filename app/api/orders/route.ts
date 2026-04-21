@@ -111,12 +111,14 @@ export async function POST(request: Request) {
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .insert({
-      org_id:       member.org_id,
-      customer_id:  resolvedCustomerId,
-      status:       "new",
-      total_qty_kg: totalQtyKg,
-      total_amount: totalAmount,
-      created_by:   user.id,
+      org_id:         member.org_id,
+      customer_id:    resolvedCustomerId,
+      status:         "new",
+      total_qty_kg:   totalQtyKg,
+      total_amount:   totalAmount,
+      owner_user_id:  body.owner_user_id || user.id,
+      opportunity_id: body.opportunity_id || null,
+      created_by:     user.id,
     })
     .select("id, org_id, customer_id, status, total_qty_kg, total_amount, created_at")
     .single();

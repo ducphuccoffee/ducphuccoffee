@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+const VALID_STAGES = ["new", "consulting", "demo", "quoted", "negotiating", "won", "lost"];
+
 export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
   const { data: { user } } = await supabase.auth.getUser();
@@ -11,17 +13,17 @@ export async function GET(request: Request) {
   if (!member?.org_id) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
+  const stage = searchParams.get("stage");
   const owner = searchParams.get("owner_user_id");
 
   let q = supabase
-    .from("leads")
-    .select("*")
+    .from("opportunities")
+    .select("*, leads(name, phone), customers(name, phone)")
     .eq("org_id", member.org_id)
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (status) q = q.eq("status", status);
+  if (stage) q = q.eq("stage", stage);
   if (owner) q = q.eq("owner_user_id", owner);
 
   const { data, error } = await q;
@@ -39,43 +41,39 @@ export async function POST(request: Request) {
   if (!member?.org_id) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  if (!body.name?.trim()) return NextResponse.json({ error: "Tên lead bắt buộc" }, { status: 400 });
+  if (!body.title?.trim()) return NextResponse.json({ error: "title bắt buộc" }, { status: 400 });
+  if (!body.lead_id && !body.customer_id)
+    return NextResponse.json({ error: "Cần lead_id hoặc customer_id" }, { status: 400 });
 
-  const { data: lead, error } = await supabase
-    .from("leads")
+  const { data, error } = await supabase
+    .from("opportunities")
     .insert({
-      org_id:        member.org_id,
-      name:          body.name.trim(),
-      phone:         body.phone?.trim() || null,
-      address:       body.address?.trim() || null,
-      area:          body.area?.trim() || null,
-      source:        body.source?.trim() || null,
-      demand:        body.demand?.trim() || null,
-      temperature:   body.temperature || "cold",
-      status:        "new",
-      owner_user_id: body.owner_user_id || user.id,
-      created_by:    user.id,
+      org_id:              member.org_id,
+      lead_id:             body.lead_id || null,
+      customer_id:         body.customer_id || null,
+      title:               body.title.trim(),
+      expected_value:      Number(body.expected_value || 0),
+      probability:         Number(body.probability || 50),
+      stage:               "new",
+      owner_user_id:       body.owner_user_id || user.id,
+      expected_close_date: body.expected_close_date || null,
+      created_by:          user.id,
     })
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Auto-create first follow-up task
-  await supabase.from("tasks").insert({
-    org_id:        member.org_id,
-    type:          "crm_followup",
-    status:        "todo",
-    role:          "sales",
-    ref_type:      "lead",
-    ref_id:        lead.id,
-    lead_id:       lead.id,
-    owner_user_id: lead.owner_user_id,
-    description:   `Liên hệ lead mới: ${lead.name}`,
-    created_by:    user.id,
-  });
+  // Update lead status to quoted if from lead
+  if (body.lead_id) {
+    await supabase
+      .from("leads")
+      .update({ status: "quoted", updated_at: new Date().toISOString() })
+      .eq("id", body.lead_id)
+      .in("status", ["new", "contacted", "meeting_scheduled"]);
+  }
 
-  return NextResponse.json({ ok: true, data: lead });
+  return NextResponse.json({ ok: true, data });
 }
 
 export async function PATCH(request: Request) {
@@ -88,39 +86,17 @@ export async function PATCH(request: Request) {
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
 
   const body = await request.json().catch(() => ({}));
-  const ALLOWED = ["name", "phone", "address", "area", "source", "demand", "temperature", "status", "owner_user_id"];
+  const ALLOWED = ["title", "expected_value", "probability", "stage", "owner_user_id", "expected_close_date", "customer_id"];
   const patch: Record<string, any> = { updated_at: new Date().toISOString() };
   for (const key of ALLOWED) {
     if (key in body) patch[key] = body[key];
   }
 
+  if (patch.stage && !VALID_STAGES.includes(patch.stage))
+    return NextResponse.json({ error: `stage phải là: ${VALID_STAGES.join(", ")}` }, { status: 400 });
+
   const { data, error } = await supabase
-    .from("leads").update(patch).eq("id", id).select().single();
+    .from("opportunities").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  // If converted, auto-create customer
-  if (body.status === "converted" && !data.converted_customer_id) {
-    const { data: customer, error: custErr } = await supabase
-      .from("customers")
-      .insert({
-        org_id:        data.org_id,
-        name:          data.name,
-        phone:         data.phone,
-        address:       data.address,
-        stage:         "new",
-        crm_segment:   "lead",
-        crm_status:    "active",
-        owner_user_id: data.owner_user_id,
-        created_by:    user.id,
-      })
-      .select("id")
-      .single();
-
-    if (customer && !custErr) {
-      await supabase.from("leads").update({ converted_customer_id: customer.id }).eq("id", id);
-      return NextResponse.json({ ok: true, data: { ...data, converted_customer_id: customer.id }, customer_id: customer.id });
-    }
-  }
-
   return NextResponse.json({ ok: true, data });
 }
