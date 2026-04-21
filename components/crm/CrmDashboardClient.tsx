@@ -62,28 +62,48 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   debt_followup: "Thu nợ",
 };
 
+type DebtRow = {
+  customer_name: string;
+  debt_amount: number;
+  is_overdue: boolean;
+  is_high_debt: boolean;
+  days_since_last_order: number;
+};
+
+type SalesKPI = {
+  user_name: string;
+  total_orders: number;
+  total_revenue: number;
+  total_commission: number;
+  conversion_rate: number;
+};
+
 export function CrmDashboardClient() {
   const [kpi, setKpi] = useState<KPI | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline>({});
   const [tasks, setTasks] = useState<{ overdue: Task[]; today: Task[]; upcoming: Task[] }>({ overdue: [], today: [], upcoming: [] });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [topLeads, setTopLeads] = useState<LeadScore[]>([]);
+  const [debts, setDebts] = useState<DebtRow[]>([]);
+  const [salesKpi, setSalesKpi] = useState<SalesKPI[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/crm-dashboard").then(r => r.json()),
       fetch("/api/lead-scoring").then(r => r.json()),
-    ]).then(([dash, scoring]) => {
+      fetch("/api/customer-debt").then(r => r.json()),
+      fetch("/api/sales-kpi").then(r => r.json()),
+    ]).then(([dash, scoring, debt, skpi]) => {
       if (dash.ok) {
         setKpi(dash.data.kpi);
         setPipeline(dash.data.pipeline);
         setTasks(dash.data.tasks);
         setAlerts(dash.data.alerts ?? []);
       }
-      if (scoring.ok) {
-        setTopLeads((scoring.data ?? []).slice(0, 5));
-      }
+      if (scoring.ok) setTopLeads((scoring.data ?? []).slice(0, 5));
+      if (debt.ok) setDebts((debt.data ?? []).slice(0, 5));
+      if (skpi.ok) setSalesKpi(skpi.data ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -225,6 +245,55 @@ export function CrmDashboardClient() {
           ))}
         </div>
       </div>
+
+      {/* Customer debt */}
+      {debts.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-3 py-2.5 border-b bg-gray-50">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Công nợ khách hàng</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {debts.map((d, i) => (
+              <div key={i} className="flex items-center justify-between px-3 py-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    {(d.is_overdue || d.is_high_debt) && <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />}
+                    <span className="text-sm font-medium text-gray-800 truncate">{d.customer_name}</span>
+                  </div>
+                  {d.is_overdue && <div className="text-[10px] text-red-500">Quá hạn {d.days_since_last_order} ngày</div>}
+                </div>
+                <span className={`text-sm font-bold shrink-0 ${d.is_high_debt ? "text-red-600" : "text-amber-600"}`}>
+                  {money(d.debt_amount)}đ
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sales KPI per user */}
+      {salesKpi.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-3 py-2.5 border-b bg-gray-50">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">KPI nhân viên</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {salesKpi.map((s, i) => (
+              <div key={i} className="px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800 truncate">{s.user_name}</span>
+                  <span className="text-sm font-bold text-gray-800">{money(s.total_revenue)}đ</span>
+                </div>
+                <div className="flex gap-3 mt-0.5 text-[10px] text-gray-400">
+                  <span>{s.total_orders} đơn</span>
+                  <span>HH: {money(s.total_commission)}đ</span>
+                  <span>CVR: {s.conversion_rate}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
