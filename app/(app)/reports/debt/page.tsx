@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default function DebtPage() {
   return (
     <div>
-      <TopBar title="Công nợ" subtitle="Customer Debt" />
+      <TopBar title="Công nợ" subtitle="Debt Report" />
       <div className="p-4">
         <DebtClient />
       </div>

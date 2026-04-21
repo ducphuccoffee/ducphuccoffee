@@ -26,6 +26,7 @@ import {
   Target,
   MessageSquare,
   CheckSquare,
+  DollarSign,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -71,10 +72,13 @@ const NAV_GROUPS = [
   {
     group: "KHÁC",
     items: [
-      { href: "/commissions",    label: "Hoa hồng",    icon: Award },
-      { href: "/reports/sales",  label: "KPI Bán hàng", icon: BarChart2 },
-      { href: "/reports/debt",   label: "Công nợ",      icon: CreditCard },
-      { href: "/settings",       label: "Cài đặt",      icon: Settings },
+      { href: "/commissions",       label: "Hoa hồng",      icon: Award },
+      { href: "/reports/revenue",   label: "Doanh thu",      icon: DollarSign },
+      { href: "/reports/sales",     label: "KPI Bán hàng",   icon: BarChart2 },
+      { href: "/reports/debt",      label: "Công nợ",        icon: CreditCard },
+      { href: "/reports/stock",     label: "Tồn kho",        icon: Package },
+      { href: "/reports/crm",       label: "Báo cáo CRM",    icon: PieChart },
+      { href: "/settings",          label: "Cài đặt",        icon: Settings },
     ],
   },
 ];

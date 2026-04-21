@@ -1,95 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { TrendingUp, Users, DollarSign, Award } from "lucide-react";
+import { useState, useEffect } from "react";
+import { DollarSign, Users, TrendingUp, Target, Award } from "lucide-react";
+import { formatCurrencyVN } from "@/lib/date";
+import { DateRangeFilter, DateRange } from "./DateRangeFilter";
 
-type SalesRow = {
-  user_id: string;
-  user_name: string;
-  total_orders: number;
-  total_revenue: number;
-  total_commission: number;
-  total_leads: number;
-  converted_leads: number;
-  conversion_rate: number;
-};
-
-const money = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
+const money = (n: number) => formatCurrencyVN(Math.round(n));
+function daysAgo(n: number) { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10); }
 
 export function SalesKpiClient() {
-  const [rows, setRows] = useState<SalesRow[]>([]);
+  const [range, setRange] = useState<DateRange>({ from: daysAgo(30), to: new Date().toISOString().slice(0, 10) + "T23:59:59" });
+  const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/sales-kpi")
+    fetch(`/api/reports?type=sales&from=${range.from}&to=${range.to}`)
       .then(r => r.json())
-      .then(res => setRows(res.data ?? []))
+      .then(res => { if (res.ok) setRows(res.data?.rows ?? []); })
       .finally(() => setLoading(false));
-  }, []);
+  }, [range]);
 
-  const totalRevenue = rows.reduce((s, r) => s + r.total_revenue, 0);
-  const totalCommission = rows.reduce((s, r) => s + r.total_commission, 0);
-  const totalOrders = rows.reduce((s, r) => s + r.total_orders, 0);
+  const totals = rows.reduce((acc, r) => ({
+    revenue: acc.revenue + r.revenue,
+    orders: acc.orders + r.orders,
+    comm: acc.comm + r.comm_total,
+    leads: acc.leads + r.leads,
+  }), { revenue: 0, orders: 0, comm: 0, leads: 0 });
 
   return (
     <div>
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="rounded-xl border bg-blue-50 p-3 text-center">
-          <div className="text-[10px] text-blue-600 uppercase">Tổng DT</div>
-          <div className="text-lg font-bold text-blue-700">{money(totalRevenue)}đ</div>
-        </div>
-        <div className="rounded-xl border bg-green-50 p-3 text-center">
-          <div className="text-[10px] text-green-600 uppercase">Tổng HH</div>
-          <div className="text-lg font-bold text-green-700">{money(totalCommission)}đ</div>
-        </div>
-        <div className="rounded-xl border bg-purple-50 p-3 text-center">
-          <div className="text-[10px] text-purple-600 uppercase">Tổng đơn</div>
-          <div className="text-lg font-bold text-purple-700">{totalOrders}</div>
-        </div>
-      </div>
+      <DateRangeFilter value={range} onChange={setRange} />
 
-      {loading ? (
-        <div className="space-y-2 animate-pulse">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl" />)}</div>
-      ) : rows.length === 0 ? (
-        <div className="text-center text-sm text-gray-400 py-8">Chưa có dữ liệu KPI</div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((r, i) => (
-            <div key={r.user_id} className="rounded-xl border bg-white p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    {i === 0 && <Award className="h-4 w-4 text-amber-500" />}
-                    <span className="text-sm font-bold text-gray-800">{r.user_name}</span>
-                    <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#{i + 1}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    <div>
-                      <div className="text-[10px] text-gray-400">Doanh thu</div>
-                      <div className="text-sm font-bold text-gray-700">{money(r.total_revenue)}đ</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400">Hoa hồng</div>
-                      <div className="text-sm font-bold text-green-600">{money(r.total_commission)}đ</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400">Đơn hàng</div>
-                      <div className="text-sm font-bold text-gray-700">{r.total_orders}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 mt-1.5 text-[10px] text-gray-400">
-                    <span><Users className="h-3 w-3 inline mr-0.5" />{r.total_leads} leads</span>
-                    <span><TrendingUp className="h-3 w-3 inline mr-0.5" />CVR: {r.conversion_rate}%</span>
-                    <span>{r.converted_leads} converted</span>
-                  </div>
+      {loading ? <Loading /> : rows.length === 0 ? <Empty /> : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <KPI icon={<DollarSign className="h-4 w-4" />} label="Tổng DT" value={`${money(totals.revenue)}đ`} />
+            <KPI icon={<Award className="h-4 w-4" />} label="Tổng HH" value={`${money(totals.comm)}đ`} />
+            <KPI icon={<Target className="h-4 w-4" />} label="Tổng đơn" value={totals.orders} />
+            <KPI icon={<Users className="h-4 w-4" />} label="Tổng lead" value={totals.leads} />
+          </div>
+
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={r.user_id} className="rounded-xl border bg-white p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  {i === 0 && <Award className="h-4 w-4 text-amber-500" />}
+                  <span className="text-sm font-bold text-gray-800">{r.name}</span>
+                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#{i + 1}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  <Stat label="Doanh thu" value={`${money(r.revenue)}đ`} />
+                  <Stat label="Đơn hàng" value={r.orders} />
+                  <Stat label="HH tổng" value={`${money(r.comm_total)}đ`} />
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <Stat label="HH chờ" value={`${money(r.comm_pending)}đ`} small />
+                  <Stat label="HH đã chi" value={`${money(r.comm_paid)}đ`} small />
+                  <Stat label="Lead" value={`${r.leads} (${r.converted} cvt)`} small />
+                  <Stat label="CVR" value={`${r.conversion_rate}%`} small />
+                </div>
+                <div className="flex gap-3 mt-2 text-[10px] text-gray-400">
+                  <span>{r.opps} cơ hội · {money(r.opp_value)}đ pipeline</span>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+function KPI({ icon, label, value }: { icon: React.ReactNode; label: string; value: any }) {
+  return (
+    <div className="rounded-xl border bg-white p-3 text-center">
+      <div className="flex items-center justify-center gap-1 text-gray-400 mb-1">{icon}<span className="text-[10px] uppercase">{label}</span></div>
+      <div className="text-lg font-bold text-gray-800">{value}</div>
+    </div>
+  );
+}
+
+function Stat({ label, value, small }: { label: string; value: any; small?: boolean }) {
+  return (
+    <div>
+      <div className={`text-gray-400 ${small ? "text-[9px]" : "text-[10px]"}`}>{label}</div>
+      <div className={`font-bold text-gray-700 ${small ? "text-xs" : "text-sm"}`}>{value}</div>
+    </div>
+  );
+}
+
+function Loading() { return <div className="space-y-2 animate-pulse">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl" />)}</div>; }
+function Empty() { return <div className="text-center text-sm text-gray-400 py-6">Chưa có dữ liệu KPI</div>; }
