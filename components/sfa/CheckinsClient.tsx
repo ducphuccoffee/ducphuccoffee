@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeVN } from "@/lib/date";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -90,7 +91,7 @@ export function CheckinsClient({ initial }: { initial: Checkin[] }) {
           <tbody>
             {initial.map((r) => (
               <tr key={r.id} className="border-t">
-                <td className="px-4 py-3 text-zinc-600">{new Date(r.checkin_at).toLocaleString("vi-VN")}</td>
+                <td className="px-4 py-3 text-zinc-600">{formatDateTimeVN(r.checkin_at)}</td>
                 <td className="px-4 py-3 font-medium">{r.place_name || "-"}</td>
                 <td className="px-4 py-3 text-zinc-600">{Number(r.lat).toFixed(5)}, {Number(r.lng).toFixed(5)}</td>
                 <td className="px-4 py-3 text-zinc-600">{r.note || "-"}</td>

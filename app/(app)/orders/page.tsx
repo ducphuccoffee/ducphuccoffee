@@ -48,7 +48,7 @@ export default async function OrdersPage() {
     customer_id:    o.customer_id,
     customer_name:  o.customers?.name ?? "—",
     customer_phone: o.customers?.phone ?? null,
-    status:         o.status ?? "draft",
+    status:         o.status ?? "new",
     payment_status: "unpaid",
     payment_method: "cash",
     total_amount:   o.total_amount,

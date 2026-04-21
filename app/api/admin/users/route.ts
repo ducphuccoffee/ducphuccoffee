@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     }
 
     // 1) Check session người gọi (phải login)
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     const { data: meRes, error: meErr } = await supabase.auth.getUser();
 
     if (meErr || !meRes?.user) {

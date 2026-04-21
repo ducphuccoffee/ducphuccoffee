@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatDateTimeVN, formatTimeVN } from "@/lib/date";
 import { getCrmDashboardData, type RiskCustomer } from "@/lib/crm";
 import { ATTENTION_CONFIG, CRM_THRESHOLDS } from "@/lib/crm-automation";
 import Link from "next/link";
@@ -12,7 +13,7 @@ const ACTIVITY_ICON: Record<string, string> = {
 };
 
 export default async function CrmDashboardPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -143,10 +144,7 @@ export default async function CrmDashboardPage() {
                 </div>
                 {r.next_follow_up_at && (
                   <span className="text-xs text-amber-600 shrink-0">
-                    {new Date(r.next_follow_up_at).toLocaleTimeString("vi-VN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatTimeVN(r.next_follow_up_at)}
                   </span>
                 )}
               </li>
@@ -177,10 +175,7 @@ export default async function CrmDashboardPage() {
                   <p className="text-xs text-gray-500 truncate">{item.sub}</p>
                 </div>
                 <span className="text-xs text-gray-400 shrink-0 mt-0.5">
-                  {new Date(item.ts).toLocaleString("vi-VN", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
+                  {formatDateTimeVN(item.ts)}
                 </span>
               </li>
             ))}

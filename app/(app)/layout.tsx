@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { StickyTopbar } from "@/components/StickyTopbar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   let displayName = "Admin";

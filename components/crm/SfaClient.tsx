@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeVN } from "@/lib/date";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
@@ -127,7 +128,7 @@ export function SfaClient({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-800 truncate">{v.customer_name}</p>
               <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(v.check_in_time).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}
+                {formatDateTimeVN(v.check_in_time)}
               </p>
               {v.note && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{v.note}</p>}
             </div>

@@ -1,4 +1,5 @@
 "use client";
+import { formatDateVN } from "@/lib/date";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -196,7 +197,7 @@ export function InventoryInClient({
               </div>
             </div>
             <div className="mt-2 flex justify-between text-xs text-gray-500">
-              <span>{new Date(r.inbound_at).toLocaleDateString("vi-VN")}</span>
+              <span>{formatDateVN(r.inbound_at)}</span>
               <span className="font-semibold text-gray-800">{money(Number(r.line_total || r.qty_kg * r.unit_cost))}</span>
             </div>
           </div>
@@ -218,7 +219,7 @@ export function InventoryInClient({
         </div>
         {rows.map((r) => (
           <div key={r.id} className="grid grid-cols-7 gap-2 px-3 py-2.5 text-sm border-b last:border-b-0 hover:bg-gray-50">
-            <div className="text-gray-600">{new Date(r.inbound_at).toLocaleDateString("vi-VN")}</div>
+            <div className="text-gray-600">{formatDateVN(r.inbound_at)}</div>
             <div className="font-mono text-xs text-gray-600">{r.lot_code}</div>
             <div className="col-span-2 font-medium">{r.green_type_name}</div>
             <div className="text-right">{Number(r.qty_kg).toFixed(2)}</div>

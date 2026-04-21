@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeVN } from "@/lib/date";
 // This component is loaded ONLY client-side (ssr: false in SfaClient.tsx)
 // Leaflet requires window/document, so never import directly in SSR context.
 
@@ -74,7 +75,7 @@ export default function SfaMap({ customers, visits }: { customers: CustomerPin[]
           <Marker key={`visit-${v.id}`} position={[v.check_in_lat!, v.check_in_lng!]} icon={visitIcon}>
             <Popup>
               📍 <strong>Check-in: {v.customer_name}</strong><br />
-              {new Date(v.check_in_time).toLocaleString("vi-VN")}<br />
+              {formatDateTimeVN(v.check_in_time)}<br />
               {v.note ? <em>{v.note}</em> : ""}
             </Popup>
           </Marker>

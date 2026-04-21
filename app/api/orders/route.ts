@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     .insert({
       org_id:       member.org_id,
       customer_id:  resolvedCustomerId,
-      status:       "draft",
+      status:       "new",
       total_qty_kg: totalQtyKg,
       total_amount: totalAmount,
       created_by:   user.id,
@@ -141,8 +141,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: itemsErr.message }, { status: 400 });
   }
 
+  // Create confirm_order task for this order
+  const { error: taskErr } = await svc.from("tasks").insert({
+    org_id:     member.org_id,
+    type:       "confirm_order",
+    status:     "todo",
+    ref_id:     order.id,
+    ref_type:   "order",
+    created_by: user.id,
+  });
+  if (taskErr) console.error("[orders] confirm_order task insert failed:", taskErr.message);
+
   return NextResponse.json({
     ok: true,
+    task_error: taskErr?.message ?? null,
     data: {
       ...order,
       order_code:     makeOrderCode(order.id),

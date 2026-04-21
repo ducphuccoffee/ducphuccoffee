@@ -13,7 +13,7 @@ function svc() {
 }
 
 export default async function SfaPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return <div className="p-8 text-red-500">Chưa đăng nhập</div>;
 

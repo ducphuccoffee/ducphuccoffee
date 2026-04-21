@@ -51,6 +51,31 @@ CREATE INDEX IF NOT EXISTS idx_orders_org_status     ON orders(org_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer       ON orders(customer_id);
 `;
 
+const TASKS_SQL = `
+CREATE TABLE IF NOT EXISTS public.tasks (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id      uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  type        text NOT NULL,
+  status      text NOT NULL DEFAULT 'todo',
+  ref_id      uuid,
+  ref_type    text,
+  assigned_to uuid REFERENCES auth.users(id),
+  created_by  uuid REFERENCES auth.users(id),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT tasks_status_check CHECK (status IN ('todo','in_progress','done','cancelled'))
+);
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "org members can manage tasks" ON public.tasks;
+CREATE POLICY "org members can manage tasks"
+  ON public.tasks FOR ALL TO authenticated
+  USING (org_id IN (SELECT org_id FROM public.org_members WHERE user_id = auth.uid() AND is_active = true))
+  WITH CHECK (org_id IN (SELECT org_id FROM public.org_members WHERE user_id = auth.uid() AND is_active = true));
+CREATE INDEX IF NOT EXISTS idx_tasks_org_id      ON public.tasks(org_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_ref_id      ON public.tasks(ref_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status      ON public.tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON public.tasks(assigned_to);
+`;
+
 async function runSql(supabaseUrl: string, serviceKey: string, sql: string) {
   const res = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
     method: "POST",
@@ -93,6 +118,7 @@ export async function POST(request: Request) {
         { name: "drop_constraint",sql: DROP_CONSTRAINT_SQL },
         { name: "add_constraint", sql: ADD_CONSTRAINT_SQL },
         { name: "indexes",        sql: INDEX_SQL },
+        { name: "tasks_table",    sql: TASKS_SQL },
       ];
       for (const step of steps) {
         try {
@@ -143,6 +169,10 @@ export async function GET(request: Request) {
   checks["status_no_confirmed"] = !statuses.includes("confirmed");
   checks["status_no_closed"] = !statuses.includes("closed");
   checks["status_has_new"] = statuses.includes("new") || (statusRows || []).length === 0;
+
+  // Check tasks table
+  const { error: tasksErr } = await svc.from("tasks").select("id").limit(1);
+  checks["tasks_table_exists"] = !tasksErr;
 
   return NextResponse.json({ status: checks, statuses });
 }

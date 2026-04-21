@@ -4,7 +4,7 @@ import type { RoastBatch, GreenStock } from "@/lib/batch-types";
 import { BatchesClient } from "@/components/batches/BatchesClient";
 
 export default async function BatchesPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   // Dùng column thực tế trong DB (bảng cũ dùng roasted_at, bảng mới có roast_date)
   // Query tất cả columns để tránh lỗi nếu schema chưa đồng bộ hoàn toàn

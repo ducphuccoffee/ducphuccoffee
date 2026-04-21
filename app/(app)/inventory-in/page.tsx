@@ -4,7 +4,7 @@ import { InventoryInClient } from "@/components/inventory/InventoryInClient";
 import type { GreenInbound, GreenType } from "@/components/inventory/InventoryInClient";
 
 export default async function Page() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const [inboundsRes, typesRes] = await Promise.all([
     supabase

@@ -4,9 +4,8 @@ import { ReportsClient } from "@/components/reports/ReportsClient";
 export const dynamic = "force-dynamic";
 
 // Revenue statuses in current DB (order_status enum: draft, confirmed, delivered, closed)
-const REVENUE_STATUSES = ["delivered", "closed"];
-// Orders that count toward order count (confirmed and above)
-const COUNT_STATUSES = ["confirmed", "delivered", "closed"];
+const REVENUE_STATUSES = ["delivered", "completed"];
+const COUNT_STATUSES = ["accepted", "preparing", "ready_to_ship", "shipping", "delivered", "completed"];
 
 export default async function ReportsPage() {
   const supabase = await createServerSupabaseClient();

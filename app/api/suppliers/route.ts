@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const ORG_ID = "00000000-0000-0000-0000-000000000001" as const;
 
 export async function GET() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("suppliers")
     .select("id,name,phone,address,note,is_active,created_at")
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const body = (await req.json().catch(() => ({}))) as { name?: string; phone?: string };
   const name = (body.name ?? "").trim();
   const phone = (body.phone ?? "").trim() || null;

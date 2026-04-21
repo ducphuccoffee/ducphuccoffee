@@ -1,4 +1,5 @@
 "use client";
+import { formatDateVN, formatDateTimeVN } from "@/lib/date";
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -8,17 +9,27 @@ const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
-  draft:     "Nháp",
-  confirmed: "Đã xác nhận",
-  delivered: "Đã giao",
-  closed:    "Đã đóng",
+  new:           "Mới",
+  accepted:      "Đã tiếp nhận",
+  preparing:     "Đang chuẩn bị",
+  ready_to_ship: "Sẵn sàng giao",
+  shipping:      "Đang giao",
+  delivered:     "Đã giao",
+  completed:     "Hoàn thành",
+  cancelled:     "Đã huỷ",
+  failed:        "Thất bại",
 };
 
 export const ORDER_STATUS_COLOR: Record<string, string> = {
-  draft:     "bg-gray-100 text-gray-600",
-  confirmed: "bg-blue-100 text-blue-700",
-  delivered: "bg-green-100 text-green-700",
-  closed:    "bg-emerald-100 text-emerald-700",
+  new:           "bg-gray-100 text-gray-600",
+  accepted:      "bg-blue-100 text-blue-700",
+  preparing:     "bg-amber-100 text-amber-700",
+  ready_to_ship: "bg-purple-100 text-purple-700",
+  shipping:      "bg-indigo-100 text-indigo-700",
+  delivered:     "bg-green-100 text-green-700",
+  completed:     "bg-emerald-100 text-emerald-700",
+  cancelled:     "bg-red-100 text-red-700",
+  failed:        "bg-red-100 text-red-700",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -460,7 +471,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
               {/* Payment method + date */}
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>{PAYMENT_METHOD_LABEL[o.payment_method] ?? o.payment_method}</span>
-                <span>{new Date(o.created_at).toLocaleDateString("vi-VN")}</span>
+                <span>{formatDateVN(o.created_at)}</span>
               </div>
             </div>
           </div>
@@ -683,7 +694,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
             <div className="p-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
               <div>
                 <h2 className="text-base font-bold text-gray-800">{detailOrder.order_code}</h2>
-                <p className="text-xs text-gray-400">{new Date(detailOrder.created_at).toLocaleString("vi-VN")}</p>
+                <p className="text-xs text-gray-400">{formatDateTimeVN(detailOrder.created_at)}</p>
               </div>
               <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-2xl p-1">×</button>
             </div>

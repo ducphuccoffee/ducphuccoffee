@@ -10,7 +10,7 @@ function toNumber(v: any) {
 }
 
 export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   // 1) yêu cầu đăng nhập
   const { data: me } = await supabase.auth.getUser();

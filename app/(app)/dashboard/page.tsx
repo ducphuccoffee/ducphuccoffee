@@ -1,4 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatWeekdayDateVN } from "@/lib/date";
+import TaskBoard from "@/components/dashboard/TaskBoard";
 import {
   Package,
   Users,
@@ -96,7 +98,7 @@ const money  = (n: number) =>
 
 // ── Page ─────────────────────────────────────────────────────────
 export default async function DashboardPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const today   = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
@@ -135,9 +137,14 @@ export default async function DashboardPage() {
   ]);
 
   let displayName = "bạn";
+  let userRole    = "staff";
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    const [{ data: profile }, { data: member }] = await Promise.all([
+      supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      supabase.from("org_members").select("role").eq("user_id", user.id).eq("is_active", true).limit(1).maybeSingle(),
+    ]);
     displayName = profile?.full_name || user.email?.split("@")[0] || "bạn";
+    userRole    = member?.role ?? "staff";
   }
 
   // ── Financial metrics ─────────────────────────────────────────
@@ -145,7 +152,7 @@ export default async function DashboardPage() {
   const todayOrders = ordersToday || [];
 
   // Revenue = delivered + closed (current DB enum values)
-  const revStatuses = ["delivered", "closed"];
+  const revStatuses = ["delivered", "completed"];
 
   const revenueThisMonth = monthOrders
     .filter((o: any) => revStatuses.includes(o.status))
@@ -159,15 +166,13 @@ export default async function DashboardPage() {
   const ordersCountMonth = monthOrders.length;
 
   // ── Operational metrics ───────────────────────────────────────
-  const opsNew       = monthOrders.filter((o: any) => o.status === "draft").length;
-  const opsPreparing = monthOrders.filter((o: any) => o.status === "confirmed").length;
-  const opsShipping  = 0; // no shipping status in current schema
-  const opsDelivered = monthOrders.filter((o: any) => ["delivered", "closed"].includes(o.status)).length;
+  const opsNew       = monthOrders.filter((o: any) => o.status === "new").length;
+  const opsPreparing = monthOrders.filter((o: any) => ["accepted", "preparing", "ready_to_ship"].includes(o.status)).length;
+  const opsShipping  = monthOrders.filter((o: any) => o.status === "shipping").length;
+  const opsDelivered = monthOrders.filter((o: any) => ["delivered", "completed"].includes(o.status)).length;
   const opsDebt      = 0; // no payment_status column yet
 
-  const todayStr = today.toLocaleDateString("vi-VN", {
-    weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
-  });
+  const todayStr = formatWeekdayDateVN(today);
 
   const recentOrders = (recentOrdersRaw || []).map((o: any) => ({
     ...o,
@@ -176,16 +181,26 @@ export default async function DashboardPage() {
   }));
 
   const ORDER_STATUS_LABEL: Record<string, string> = {
-    draft:     "Nháp",
-    confirmed: "Đã xác nhận",
-    delivered: "Đã giao",
-    closed:    "Đã đóng",
+    new:           "Mới",
+    accepted:      "Đã tiếp nhận",
+    preparing:     "Đang chuẩn bị",
+    ready_to_ship: "Sẵn sàng giao",
+    shipping:      "Đang giao",
+    delivered:     "Đã giao",
+    completed:     "Hoàn thành",
+    cancelled:     "Đã huỷ",
+    failed:        "Thất bại",
   };
   const ORDER_STATUS_COLOR: Record<string, string> = {
-    draft:     "bg-gray-100 text-gray-500",
-    confirmed: "bg-blue-100 text-blue-700",
-    delivered: "bg-green-100 text-green-700",
-    closed:    "bg-emerald-100 text-emerald-700",
+    new:           "bg-gray-100 text-gray-500",
+    accepted:      "bg-blue-100 text-blue-700",
+    preparing:     "bg-amber-100 text-amber-700",
+    ready_to_ship: "bg-purple-100 text-purple-700",
+    shipping:      "bg-indigo-100 text-indigo-700",
+    delivered:     "bg-green-100 text-green-700",
+    completed:     "bg-emerald-100 text-emerald-700",
+    cancelled:     "bg-red-100 text-red-700",
+    failed:        "bg-red-100 text-red-700",
   };
 
   return (
@@ -301,6 +316,10 @@ export default async function DashboardPage() {
           <QuickAction href="/products"   label="Thêm sản phẩm"   desc="Cập nhật danh mục"     icon={Package}      color="bg-green-500" />
         </div>
       </div>
+
+      {/* Task board */}
+      {user && <TaskBoard userId={user.id} userRole={userRole} />}
+
     </div>
   );
 }

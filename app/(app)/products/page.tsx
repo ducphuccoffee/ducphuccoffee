@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ProductsClient, type Product, type GreenType } from "@/components/products/ProductsClient";
 
 export default async function ProductsPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const [productsRes, greenTypesRes] = await Promise.all([
     supabase
@@ -22,7 +22,7 @@ export default async function ProductsPage() {
   const error = productsRes.error?.message ?? null;
 
   // Fetch formulas separately và map vào products
-  const supabase2 = createServerSupabaseClient();
+  const supabase2 = await createServerSupabaseClient();
   const { data: formulasData } = await supabase2
     .from("product_formulas")
     .select("id, product_id, green_type_id, ratio_pct");

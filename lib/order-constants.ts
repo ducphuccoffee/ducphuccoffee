@@ -1,7 +1,8 @@
 // Order flow constants — shared between API route and client components
 // Statuses match the actual order_status enum in Supabase
 export const ORDER_STATUSES = [
-  "draft", "confirmed", "delivered", "closed",
+  "new", "accepted", "preparing", "ready_to_ship",
+  "shipping", "delivered", "completed", "cancelled", "failed",
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
@@ -13,10 +14,15 @@ export const PAYMENT_METHODS = ["cash", "bank_transfer", "debt"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
-  draft:     "Nháp",
-  confirmed: "Đã xác nhận",
-  delivered: "Đã giao",
-  closed:    "Đã đóng",
+  new:           "Mới",
+  accepted:      "Đã tiếp nhận",
+  preparing:     "Đang chuẩn bị",
+  ready_to_ship: "Sẵn sàng giao",
+  shipping:      "Đang giao",
+  delivered:     "Đã giao",
+  completed:     "Hoàn thành",
+  cancelled:     "Đã huỷ",
+  failed:        "Thất bại",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {

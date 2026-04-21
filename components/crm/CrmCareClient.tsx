@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateVN, formatDateTimeVN } from "@/lib/date";
 import { useState, useMemo } from "react";
 import {
   computeAttentionStatus,
@@ -262,7 +263,7 @@ export function CrmCareClient({
                 {/* Follow-up indicator */}
                 {c.next_follow_up_at && (
                   <div className={`text-xs shrink-0 rounded-lg px-2 py-1 ${c.overdue != null ? "bg-red-100 text-red-700 font-semibold" : "bg-amber-50 text-amber-700"}`}>
-                    {c.overdue != null ? `⏰ Trễ ${c.overdue}n` : `📅 ${new Date(c.next_follow_up_at).toLocaleDateString("vi-VN")}`}
+                    {c.overdue != null ? `⏰ Trễ ${c.overdue}n` : `📅 ${formatDateVN(c.next_follow_up_at)}`}
                   </div>
                 )}
               </div>
@@ -361,8 +362,8 @@ export function CrmCareClient({
                             (selected as any).overdue != null ? "text-red-600" : "text-amber-600"
                           }`}>
                             {(selected as any).overdue != null
-                              ? `⏰ Trễ ${(selected as any).overdue} ngày — ${new Date(selected.next_follow_up_at).toLocaleString("vi-VN")}`
-                              : `📅 ${new Date(selected.next_follow_up_at).toLocaleString("vi-VN")}`}
+                              ? `⏰ Trễ ${(selected as any).overdue} ngày — ${formatDateTimeVN(selected.next_follow_up_at)}`
+                              : `📅 ${formatDateTimeVN(selected.next_follow_up_at)}`}
                           </p>
                         )}
                         <div className="flex gap-2">
@@ -404,7 +405,7 @@ export function CrmCareClient({
                               <div className="absolute -left-1.5 w-3 h-3 rounded-full bg-white border-2 border-blue-400" />
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-gray-400">{new Date(item.ts).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</p>
+                                  <p className="text-xs text-gray-400">{formatDateTimeVN(item.ts)}</p>
                                   <p className="text-sm font-medium text-gray-800 mt-0.5">
                                     {item.type === "order" ? "🛒" : item.type === "note" ? "📝" : "📍"} {item.title}
                                   </p>
@@ -466,7 +467,7 @@ export function CrmCareClient({
                                 </button>
                               </div>
                               <p className="text-xs text-gray-400 mt-1.5">
-                                {(n.profiles as any)?.full_name ?? "—"} · {new Date(n.created_at).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}
+                                {(n.profiles as any)?.full_name ?? "—"} · {formatDateTimeVN(n.created_at)}
                               </p>
                             </li>
                           ))}

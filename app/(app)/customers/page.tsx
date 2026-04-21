@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CustomersClient } from "@/components/customers/CustomersClient";
 
 export default async function CustomersPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const [{ data: customers }, { data: orderStats }] = await Promise.all([
     supabase
