@@ -71,9 +71,10 @@ const NAV_GROUPS = [
   {
     group: "KHÁC",
     items: [
-      { href: "/commissions", label: "Hoa hồng", icon: Award },
-      { href: "/reports",     label: "Báo cáo",  icon: BarChart2 },
-      { href: "/settings",    label: "Cài đặt",  icon: Settings },
+      { href: "/commissions",    label: "Hoa hồng",    icon: Award },
+      { href: "/reports/sales",  label: "KPI Bán hàng", icon: BarChart2 },
+      { href: "/reports/debt",   label: "Công nợ",      icon: CreditCard },
+      { href: "/settings",       label: "Cài đặt",      icon: Settings },
     ],
   },
 ];

@@ -195,6 +195,49 @@ export async function PATCH(request: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // Auto-create commission when order completed/delivered
+  if (patch.status && ["completed", "delivered"].includes(patch.status) && data) {
+    const { data: existingComm } = await supabase
+      .from("commissions").select("id").eq("order_id", id).limit(1).maybeSingle();
+
+    if (!existingComm) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: member } = await supabase
+        .from("org_members").select("org_id").eq("user_id", authUser!.id).eq("is_active", true).limit(1).maybeSingle();
+
+      if (member?.org_id) {
+        const commType = "coffee";
+        const { data: rule } = await supabase
+          .from("commission_rules")
+          .select("fixed_amount, collaborator_rate_per_kg")
+          .eq("org_id", member.org_id)
+          .eq("commission_type", commType)
+          .eq("is_active", true)
+          .limit(1).maybeSingle();
+
+        const qtyKg = Number(data.total_qty_kg ?? 0);
+        const fixedAmt = Number(rule?.fixed_amount ?? 0);
+        const rateKg = Number(rule?.collaborator_rate_per_kg ?? 0);
+        const commAmt = fixedAmt > 0 ? fixedAmt : rateKg * qtyKg;
+
+        if (commAmt > 0) {
+          await supabase.from("commissions").insert({
+            org_id: member.org_id,
+            order_id: id,
+            beneficiary_user_id: data.owner_user_id,
+            amount: commAmt,
+            qty_kg: qtyKg,
+            rate_per_kg: rateKg,
+            commission_type: commType,
+            status: "pending",
+            created_by: authUser!.id,
+          });
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, data });
 }
 
