@@ -16,7 +16,15 @@ type Lead = {
   status: string;
   owner_user_id: string;
   created_at: string;
+  updated_at?: string | null;
 };
+
+const STALE_DAYS = 7;
+function daysSinceUpdate(l: Lead): number | null {
+  const ts = l.updated_at ?? l.created_at;
+  if (!ts) return null;
+  return Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000);
+}
 
 const STATUS_LABEL: Record<string, string> = {
   new: "Mới",
@@ -73,7 +81,17 @@ export function LeadsClient() {
 
   const filtered = useMemo(() => {
     let list = leads;
-    if (filterStatus !== "all") list = list.filter(l => l.status === filterStatus);
+    if (filterStatus === "stale") {
+      list = list.filter(l => {
+        if (["converted", "lost"].includes(l.status)) return false;
+        const d = daysSinceUpdate(l);
+        return d != null && d >= STALE_DAYS;
+      });
+    } else if (filterStatus === "active_pipeline") {
+      list = list.filter(l => !["converted", "lost"].includes(l.status));
+    } else if (filterStatus !== "all") {
+      list = list.filter(l => l.status === filterStatus);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(l =>
@@ -82,8 +100,21 @@ export function LeadsClient() {
         (l.area ?? "").toLowerCase().includes(q)
       );
     }
-    return list;
+    // Prioritise: hot temperature + stale leads first.
+    return [...list].sort((a, b) => {
+      const aStale = daysSinceUpdate(a) ?? 0;
+      const bStale = daysSinceUpdate(b) ?? 0;
+      const aHot = a.temperature === "hot" ? 1 : 0;
+      const bHot = b.temperature === "hot" ? 1 : 0;
+      if (aHot !== bHot) return bHot - aHot;
+      return bStale - aStale;
+    });
   }, [leads, search, filterStatus]);
+
+  const staleCount = useMemo(() =>
+    leads.filter(l => !["converted", "lost"].includes(l.status) && (daysSinceUpdate(l) ?? 0) >= STALE_DAYS).length,
+    [leads]
+  );
 
   function resetForm() {
     setName(""); setPhone(""); setAddress(""); setArea("");
@@ -135,12 +166,21 @@ export function LeadsClient() {
 
       {/* Status filter */}
       <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
-        {[{ key: "all", label: "Tất cả" }, ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ key: k, label: v }))].map(f => (
+        {[
+          { key: "all", label: "Tất cả" },
+          { key: "active_pipeline", label: "Đang theo" },
+          { key: "stale", label: `Chưa chăm sóc ${staleCount > 0 ? `(${staleCount})` : ""}`, highlight: staleCount > 0 },
+          ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ key: k, label: v })),
+        ].map((f: any) => (
           <button
             key={f.key}
             onClick={() => setFilterStatus(f.key)}
             className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-              filterStatus === f.key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              filterStatus === f.key
+                ? "bg-blue-600 text-white"
+                : f.highlight
+                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             {f.label}
@@ -157,39 +197,48 @@ export function LeadsClient() {
         <div className="text-center text-sm text-gray-400 py-8">Chưa có lead nào</div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(lead => (
-            <div key={lead.id} className="rounded-xl border bg-white p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-bold text-gray-800">{lead.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TEMP_COLOR[lead.temperature] ?? ""}`}>
-                      {TEMP_LABEL[lead.temperature] ?? lead.temperature}
-                    </span>
+          {filtered.map(lead => {
+            const d = daysSinceUpdate(lead);
+            const isStale = d != null && d >= STALE_DAYS && !["converted", "lost"].includes(lead.status);
+            return (
+              <div key={lead.id} className={`rounded-xl border bg-white p-3 ${isStale ? "border-amber-300" : ""}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-bold text-gray-800">{lead.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TEMP_COLOR[lead.temperature] ?? ""}`}>
+                        {TEMP_LABEL[lead.temperature] ?? lead.temperature}
+                      </span>
+                      {isStale && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                          ⏰ {d}n
+                        </span>
+                      )}
+                    </div>
+                    {lead.phone && (
+                      <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                        <Phone className="h-3 w-3" /> {lead.phone}
+                      </div>
+                    )}
+                    {lead.area && (
+                      <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
+                        <MapPin className="h-3 w-3" /> {lead.area}
+                      </div>
+                    )}
                   </div>
-                  {lead.phone && (
-                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                      <Phone className="h-3 w-3" /> {lead.phone}
-                    </div>
-                  )}
-                  {lead.area && (
-                    <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
-                      <MapPin className="h-3 w-3" /> {lead.area}
-                    </div>
-                  )}
+                  <div className="text-right shrink-0">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status] ?? "bg-gray-100 text-gray-600"}`}>
+                      {STATUS_LABEL[lead.status] ?? lead.status}
+                    </span>
+                    <div className="text-[10px] text-gray-400 mt-1">{formatDateVN(lead.created_at)}</div>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status] ?? "bg-gray-100 text-gray-600"}`}>
-                    {STATUS_LABEL[lead.status] ?? lead.status}
-                  </span>
-                  <div className="text-[10px] text-gray-400 mt-1">{formatDateVN(lead.created_at)}</div>
-                </div>
+                {lead.demand && (
+                  <div className="text-xs text-gray-500 mt-1.5 truncate">Nhu cầu: {lead.demand}</div>
+                )}
               </div>
-              {lead.demand && (
-                <div className="text-xs text-gray-500 mt-1.5 truncate">Nhu cầu: {lead.demand}</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

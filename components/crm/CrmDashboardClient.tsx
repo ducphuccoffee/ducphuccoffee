@@ -121,6 +121,7 @@ export function CrmDashboardClient() {
 
       {/* Quick links */}
       <div className="flex gap-2 flex-wrap">
+        <QuickLink href="/crm/today" label="Việc hôm nay" />
         <QuickLink href="/leads" label="Tạo lead" />
         <QuickLink href="/crm/opportunities" label="Tạo cơ hội" />
         <QuickLink href="/crm/activities" label="Ghi hoạt động" />

@@ -68,6 +68,14 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  // If this check-in fulfills a planned visit task, mark that task done.
+  if (body.task_id) {
+    await supabase.from("tasks")
+      .update({ status: "done" })
+      .eq("id", body.task_id)
+      .eq("org_id", member.org_id);
+  }
+
   // Auto-create follow-up task if result = followup_needed
   if (body.result === "followup_needed") {
     await supabase.from("tasks").insert({

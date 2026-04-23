@@ -1,8 +1,9 @@
 "use client";
 
-import { formatDateTimeVN } from "@/lib/date";
+import { formatDateTimeVN, formatDateVN } from "@/lib/date";
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 const SfaMap = dynamic(() => import("./SfaMap"), { ssr: false, loading: () => <div className="h-72 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">Đang tải bản đồ…</div> });
 
@@ -54,10 +55,12 @@ export function SfaClient({
   isAdmin: boolean;
 }) {
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [plannedVisits, setPlannedVisits] = useState<Array<{ id: string; description: string | null; due_at: string | null; customer_id: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [form, setForm] = useState({
     customer_id: "",
     note: "",
@@ -65,6 +68,38 @@ export function SfaClient({
     checkin_lat: "",
     checkin_lng: "",
   });
+
+  // Read query params for deep-link check-in from Today page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const custId = params.get("customer_id");
+    const tId = params.get("task_id");
+    if (tId) setTaskId(tId);
+    if (custId) {
+      setForm(f => ({ ...f, customer_id: custId }));
+      setShowForm(true);
+    }
+  }, []);
+
+  function loadPlanned() {
+    fetch("/api/crm-tasks").then(r => r.json()).then(res => {
+      const rows = (res.data ?? []).filter((t: any) => t.type === "visit");
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
+      const today = rows.filter((t: any) => {
+        if (!t.due_at) return true;
+        const d = new Date(t.due_at);
+        return d < tomorrowStart; // overdue + today
+      });
+      setPlannedVisits(today.map((t: any) => ({
+        id: t.id,
+        description: t.description,
+        due_at: t.due_at,
+        customer_id: t.customer_id,
+      })));
+    });
+  }
 
   function loadVisits() {
     setLoading(true);
@@ -81,7 +116,7 @@ export function SfaClient({
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadVisits(); }, []);
+  useEffect(() => { loadVisits(); loadPlanned(); }, []);
 
   async function detectGps() {
     if (!navigator.geolocation) { setError("Trình duyệt không hỗ trợ GPS"); return; }
@@ -105,13 +140,16 @@ export function SfaClient({
         result:       form.result,
         checkin_lat:  form.checkin_lat ? Number(form.checkin_lat) : null,
         checkin_lng:  form.checkin_lng ? Number(form.checkin_lng) : null,
+        task_id:      taskId || undefined,
       }),
     });
     const json = await res.json();
     if (!res.ok || !json.ok) { setError(json.error ?? "Lỗi"); setSaving(false); return; }
     setShowForm(false);
     setSaving(false);
+    setTaskId(null);
     loadVisits();
+    loadPlanned();
   }
 
   const mapPins = customers.filter(c => c.latitude != null && c.longitude != null);
@@ -128,10 +166,44 @@ export function SfaClient({
         </div>
       </div>
 
+      {/* Planned visits today */}
+      {plannedVisits.length > 0 && (
+        <div className="bg-white rounded-xl border border-orange-200 overflow-hidden">
+          <div className="px-3 py-2 border-b bg-orange-50 flex items-center justify-between">
+            <p className="text-sm font-semibold text-orange-800">Kế hoạch ghé thăm hôm nay ({plannedVisits.length})</p>
+            <Link href="/crm/today" className="text-[11px] text-blue-600 hover:underline">Việc hôm nay →</Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {plannedVisits.map(p => {
+              const cust = customers.find(c => c.id === p.customer_id);
+              return (
+                <div key={p.id} className="flex items-center justify-between px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-gray-800 truncate">{cust?.name ?? p.description ?? "Ghé thăm"}</div>
+                    {p.due_at && <div className="text-[10px] text-gray-400">Hẹn: {formatDateVN(p.due_at)}</div>}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setTaskId(p.id);
+                      setForm(f => ({ ...f, customer_id: p.customer_id ?? "" }));
+                      setShowForm(true);
+                      setError(null);
+                    }}
+                    className="text-[11px] bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 shrink-0"
+                  >
+                    Check-in
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-600">{visits.length} visit</p>
-        <button onClick={() => { setShowForm(true); setError(null); setForm({ customer_id: "", note: "", result: "met_owner", checkin_lat: "", checkin_lng: "" }); }}
+        <button onClick={() => { setTaskId(null); setShowForm(true); setError(null); setForm({ customer_id: "", note: "", result: "met_owner", checkin_lat: "", checkin_lng: "" }); }}
           className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
           + Check-in
         </button>

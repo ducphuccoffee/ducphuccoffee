@@ -27,6 +27,7 @@ import {
   MessageSquare,
   CheckSquare,
   DollarSign,
+  Sun,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -46,6 +47,7 @@ const NAV_GROUPS = [
   {
     group: "CRM",
     items: [
+      { href: "/crm/today",           label: "Việc hôm nay",   icon: Sun },
       { href: "/crm/dashboard",       label: "CRM Dashboard",  icon: PieChart },
       { href: "/crm/opportunities",   label: "Cơ hội",         icon: Target },
       { href: "/crm/activities",      label: "Hoạt động",      icon: MessageSquare },
