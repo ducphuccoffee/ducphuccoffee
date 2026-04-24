@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+export const dynamic = "force-dynamic";
+
 const TARGET_SELLABLE_KG = 50;
 const LOW_THRESHOLD_KG = 10;
 

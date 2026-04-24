@@ -55,12 +55,12 @@ export function SfaClient({
   isAdmin: boolean;
 }) {
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [plannedVisits, setPlannedVisits] = useState<Array<{ id: string; description: string | null; due_at: string | null; customer_id: string | null }>>([]);
+  const [plannedVisits, setPlannedVisits] = useState<Array<{ id: string; note: string | null; checkin_at: string; customer_id: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(null);
   const [form, setForm] = useState({
     customer_id: "",
     note: "",
@@ -74,8 +74,8 @@ export function SfaClient({
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const custId = params.get("customer_id");
-    const tId = params.get("task_id");
-    if (tId) setTaskId(tId);
+    const vId = params.get("visit_id");
+    if (vId) setVisitId(vId);
     if (custId) {
       setForm(f => ({ ...f, customer_id: custId }));
       setShowForm(true);
@@ -83,20 +83,19 @@ export function SfaClient({
   }, []);
 
   function loadPlanned() {
-    fetch("/api/crm-tasks").then(r => r.json()).then(res => {
-      const rows = (res.data ?? []).filter((t: any) => t.type === "visit");
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
-      const today = rows.filter((t: any) => {
-        if (!t.due_at) return true;
-        const d = new Date(t.due_at);
-        return d < tomorrowStart; // overdue + today
+    fetch("/api/sfa-visits?planned=true").then(r => r.json()).then(res => {
+      const rows = res.data ?? [];
+      const tomorrowStart = new Date(); tomorrowStart.setHours(0, 0, 0, 0);
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      const today = rows.filter((v: any) => {
+        if (!v.checkin_at) return true;
+        return new Date(v.checkin_at) < tomorrowStart; // overdue + today
       });
-      setPlannedVisits(today.map((t: any) => ({
-        id: t.id,
-        description: t.description,
-        due_at: t.due_at,
-        customer_id: t.customer_id,
+      setPlannedVisits(today.map((v: any) => ({
+        id: v.id,
+        note: v.note,
+        checkin_at: v.checkin_at,
+        customer_id: v.customer_id,
       })));
     });
   }
@@ -140,14 +139,14 @@ export function SfaClient({
         result:       form.result,
         checkin_lat:  form.checkin_lat ? Number(form.checkin_lat) : null,
         checkin_lng:  form.checkin_lng ? Number(form.checkin_lng) : null,
-        task_id:      taskId || undefined,
+        visit_id:     visitId || undefined,
       }),
     });
     const json = await res.json();
     if (!res.ok || !json.ok) { setError(json.error ?? "Lỗi"); setSaving(false); return; }
     setShowForm(false);
     setSaving(false);
-    setTaskId(null);
+    setVisitId(null);
     loadVisits();
     loadPlanned();
   }
@@ -179,12 +178,12 @@ export function SfaClient({
               return (
                 <div key={p.id} className="flex items-center justify-between px-3 py-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-gray-800 truncate">{cust?.name ?? p.description ?? "Ghé thăm"}</div>
-                    {p.due_at && <div className="text-[10px] text-gray-400">Hẹn: {formatDateVN(p.due_at)}</div>}
+                    <div className="text-sm text-gray-800 truncate">{cust?.name ?? p.note ?? "Ghé thăm"}</div>
+                    {p.checkin_at && <div className="text-[10px] text-gray-400">Hẹn: {formatDateVN(p.checkin_at)}</div>}
                   </div>
                   <button
                     onClick={() => {
-                      setTaskId(p.id);
+                      setVisitId(p.id);
                       setForm(f => ({ ...f, customer_id: p.customer_id ?? "" }));
                       setShowForm(true);
                       setError(null);
@@ -203,7 +202,7 @@ export function SfaClient({
       {/* Toolbar */}
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-600">{visits.length} visit</p>
-        <button onClick={() => { setTaskId(null); setShowForm(true); setError(null); setForm({ customer_id: "", note: "", result: "met_owner", checkin_lat: "", checkin_lng: "" }); }}
+        <button onClick={() => { setVisitId(null); setShowForm(true); setError(null); setForm({ customer_id: "", note: "", result: "met_owner", checkin_lat: "", checkin_lng: "" }); }}
           className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
           + Check-in
         </button>

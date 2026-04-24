@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+export const dynamic = "force-dynamic";
+
 const LOW_STOCK_THRESHOLD_KG = 10;
 
 export async function GET(request: Request) {

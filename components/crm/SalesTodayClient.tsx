@@ -4,19 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDateVN, formatDateTimeVN } from "@/lib/date";
 import {
-  Phone, MapPin, FileText, CreditCard, AlertTriangle, CheckCircle, Clock,
-  Users, Target, TrendingDown, Plus, ArrowRight, RefreshCw,
+  MapPin, AlertTriangle, CheckCircle, Clock,
+  Users, Target, TrendingDown, Plus, ArrowRight, RefreshCw, MessageSquare,
 } from "lucide-react";
 
-type Task = {
+type PlannedVisit = {
   id: string;
-  type: string;
-  description: string | null;
-  lead_id: string | null;
   customer_id: string | null;
-  opportunity_id: string | null;
-  due_at: string | null;
-  created_at: string;
+  lead_id: string | null;
+  checkin_at: string;
+  note: string | null;
+  display_name: string;
 };
 
 type Visit = {
@@ -29,26 +27,28 @@ type Visit = {
   display_name: string;
 };
 
+type FollowupVisit = Visit & { days_since: number | null };
+
 type StaleLead = { id: string; name: string; phone: string | null; status: string; temperature: string; days_since_update: number | null };
 type StuckOpp = { id: string; title: string; stage: string; expected_value: number; expected_close_date: string | null; contact_name: string; days_stuck: number | null; is_past_due: boolean };
 type CustomerOverdue = { id: string; name: string; phone: string | null; next_follow_up_at: string | null; overdue_days: number | null };
 type DormantCustomer = { id: string; name: string; phone: string | null; last_order_at: string | null; days_since_last_order: number | null };
 
 type Summary = {
-  calls_total: number; calls_overdue: number;
   visits_planned: number; visits_overdue: number; visits_done_today: number;
-  quotations_todo: number; debts_todo: number;
+  followups_needed: number;
   stale_leads: number; stuck_opps: number;
   customers_overdue: number; dormant_customers: number;
 };
 
 type ApiResponse = {
   summary: Summary;
-  calls: { overdue: Task[]; today: Task[] };
-  visits: { planned_overdue: Task[]; planned_today: Task[]; done_today: Visit[] };
-  quotations: Task[];
-  debts: Task[];
-  upcoming: Task[];
+  visits: {
+    planned_overdue: PlannedVisit[];
+    planned_today: PlannedVisit[];
+    done_today: Visit[];
+    followup_needed: FollowupVisit[];
+  };
   stale_leads: StaleLead[];
   stuck_opportunities: StuckOpp[];
   customers_overdue: CustomerOverdue[];
@@ -89,45 +89,27 @@ export function SalesTodayClient() {
     });
   }, []);
 
-  async function completeTask(id: string) {
+  async function postponePlannedVisit(id: string) {
     setBusyId(id);
-    await fetch(`/api/crm-tasks?id=${id}`, {
+    const tomorrow = new Date(Date.now() + 86_400_000);
+    tomorrow.setHours(10, 0, 0, 0);
+    await fetch(`/api/sfa-visits?id=${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({ checkin_at: tomorrow.toISOString() }),
     });
     setBusyId(null);
     load();
   }
 
-  async function postponeTask(id: string) {
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
+  async function cancelPlannedVisit(id: string) {
+    if (!confirm("Huỷ kế hoạch ghé thăm này?")) return;
     setBusyId(id);
-    await fetch(`/api/crm-tasks?id=${id}`, {
+    // Mark as 'lost' to remove from planned list without losing the record.
+    await fetch(`/api/sfa-visits?id=${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ due_at: tomorrow }),
-    });
-    setBusyId(null);
-    load();
-  }
-
-  async function logCall(task: Task) {
-    if (!task.lead_id && !task.customer_id) { completeTask(task.id); return; }
-    setBusyId(task.id);
-    await fetch("/api/crm-activities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "call",
-        content: task.description ? `Đã gọi: ${task.description}` : "Đã gọi",
-        lead_id: task.lead_id ?? undefined,
-        customer_id: task.customer_id ?? undefined,
-      }),
-    });
-    await fetch(`/api/crm-tasks?id=${task.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({ result: "lost", note: "(huỷ kế hoạch)" }),
     });
     setBusyId(null);
     load();
@@ -137,7 +119,7 @@ export function SalesTodayClient() {
     if (!data) return false;
     const s = data.summary;
     return (
-      s.calls_total + s.visits_planned + s.quotations_todo + s.debts_todo +
+      s.visits_planned + s.followups_needed +
       s.stale_leads + s.stuck_opps + s.customers_overdue + s.dormant_customers === 0
     );
   }, [data]);
@@ -168,39 +150,16 @@ export function SalesTodayClient() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-4 gap-2">
-        <KpiTile label="Gọi" value={s.calls_total} alert={s.calls_overdue > 0} icon={<Phone className="h-3.5 w-3.5" />} />
-        <KpiTile label="Visit" value={s.visits_planned} alert={s.visits_overdue > 0} icon={<MapPin className="h-3.5 w-3.5" />} sub={`${s.visits_done_today} xong`} />
-        <KpiTile label="Báo giá" value={s.quotations_todo} icon={<FileText className="h-3.5 w-3.5" />} />
-        <KpiTile label="Thu nợ" value={s.debts_todo} icon={<CreditCard className="h-3.5 w-3.5" />} />
+        <KpiTile label="Visit hôm nay" value={s.visits_planned} alert={s.visits_overdue > 0} icon={<MapPin className="h-3.5 w-3.5" />} sub={`${s.visits_done_today} xong`} />
+        <KpiTile label="Cần follow-up" value={s.followups_needed} alert={s.followups_needed > 0} icon={<MessageSquare className="h-3.5 w-3.5" />} />
+        <KpiTile label="Lead ngủ quên" value={s.stale_leads} icon={<Users className="h-3.5 w-3.5" />} />
+        <KpiTile label="Cơ hội kẹt" value={s.stuck_opps} icon={<Target className="h-3.5 w-3.5" />} />
       </div>
 
       {allEmpty && (
         <div className="rounded-xl border bg-green-50 p-4 text-center text-sm text-green-700 flex items-center justify-center gap-2">
           <CheckCircle className="h-4 w-4" /> Tuyệt! Hôm nay không còn việc cần xử lý.
         </div>
-      )}
-
-      {/* CALLS — overdue + today */}
-      {(data.calls.overdue.length > 0 || data.calls.today.length > 0) && (
-        <Section
-          title="Cần gọi / follow-up"
-          icon={<Phone className="h-4 w-4 text-blue-600" />}
-          count={data.calls.overdue.length + data.calls.today.length}
-          accent={data.calls.overdue.length > 0 ? "red" : "blue"}
-        >
-          {data.calls.overdue.length > 0 && (
-            <GroupLabel label={`Quá hạn (${data.calls.overdue.length})`} color="red" />
-          )}
-          {data.calls.overdue.map(t => (
-            <CallRow key={t.id} task={t} busy={busyId === t.id} overdue onComplete={() => logCall(t)} onPostpone={() => postponeTask(t.id)} />
-          ))}
-          {data.calls.today.length > 0 && (
-            <GroupLabel label={`Hôm nay (${data.calls.today.length})`} color="blue" />
-          )}
-          {data.calls.today.map(t => (
-            <CallRow key={t.id} task={t} busy={busyId === t.id} onComplete={() => logCall(t)} onPostpone={() => postponeTask(t.id)} />
-          ))}
-        </Section>
       )}
 
       {/* VISITS — planned + done */}
@@ -213,12 +172,16 @@ export function SalesTodayClient() {
           extraLink={{ label: "Mở SFA", href: "/crm/sfa" }}
         >
           {data.visits.planned_overdue.length > 0 && <GroupLabel label={`Chưa thực hiện (${data.visits.planned_overdue.length})`} color="red" />}
-          {data.visits.planned_overdue.map(t => (
-            <VisitPlanRow key={t.id} task={t} busy={busyId === t.id} overdue onComplete={() => completeTask(t.id)} onPostpone={() => postponeTask(t.id)} />
+          {data.visits.planned_overdue.map(v => (
+            <VisitPlanRow key={v.id} visit={v} busy={busyId === v.id} overdue
+              onPostpone={() => postponePlannedVisit(v.id)}
+              onCancel={() => cancelPlannedVisit(v.id)} />
           ))}
           {data.visits.planned_today.length > 0 && <GroupLabel label={`Kế hoạch hôm nay (${data.visits.planned_today.length})`} color="orange" />}
-          {data.visits.planned_today.map(t => (
-            <VisitPlanRow key={t.id} task={t} busy={busyId === t.id} onComplete={() => completeTask(t.id)} onPostpone={() => postponeTask(t.id)} />
+          {data.visits.planned_today.map(v => (
+            <VisitPlanRow key={v.id} visit={v} busy={busyId === v.id}
+              onPostpone={() => postponePlannedVisit(v.id)}
+              onCancel={() => cancelPlannedVisit(v.id)} />
           ))}
           {data.visits.done_today.length > 0 && (
             <>
@@ -234,31 +197,17 @@ export function SalesTodayClient() {
         </Section>
       )}
 
-      {/* QUOTATIONS */}
-      {data.quotations.length > 0 && (
+      {/* FOLLOW-UP NEEDED (from sfa_visits.result='followup_needed') */}
+      {data.visits.followup_needed.length > 0 && (
         <Section
-          title="Theo báo giá"
-          icon={<FileText className="h-4 w-4 text-amber-600" />}
-          count={data.quotations.length}
+          title="Cần follow-up (sau ghé thăm)"
+          icon={<MessageSquare className="h-4 w-4 text-amber-600" />}
+          count={data.visits.followup_needed.length}
           accent="amber"
+          extraLink={{ label: "Mở SFA", href: "/crm/sfa" }}
         >
-          {data.quotations.map(t => (
-            <QuotationRow key={t.id} task={t} busy={busyId === t.id} onComplete={() => completeTask(t.id)} onPostpone={() => postponeTask(t.id)} />
-          ))}
-        </Section>
-      )}
-
-      {/* DEBTS */}
-      {data.debts.length > 0 && (
-        <Section
-          title="Thu nợ"
-          icon={<CreditCard className="h-4 w-4 text-red-600" />}
-          count={data.debts.length}
-          accent="red"
-          extraLink={{ label: "Báo cáo nợ", href: "/reports/debt" }}
-        >
-          {data.debts.map(t => (
-            <DebtRow key={t.id} task={t} busy={busyId === t.id} onComplete={() => completeTask(t.id)} onPostpone={() => postponeTask(t.id)} />
+          {data.visits.followup_needed.slice(0, 15).map(v => (
+            <FollowupRow key={v.id} visit={v} />
           ))}
         </Section>
       )}
@@ -437,42 +386,19 @@ function GroupLabel({ label, color }: { label: string; color: "red" | "orange" |
   return <div className={`text-[10px] uppercase tracking-wider font-bold mt-2 first:mt-0 ${cls[color]}`}>{label}</div>;
 }
 
-function TaskActions({ busy, onComplete, onPostpone, completeLabel = "Xong" }: { busy: boolean; onComplete: () => void; onPostpone: () => void; completeLabel?: string }) {
-  return (
-    <div className="flex gap-1 shrink-0">
-      <button onClick={onPostpone} disabled={busy}
-        className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded hover:bg-amber-200 disabled:opacity-50">+1d</button>
-      <button onClick={onComplete} disabled={busy}
-        className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded hover:bg-green-200 disabled:opacity-50">{completeLabel}</button>
-    </div>
-  );
-}
-
-function CallRow({ task, busy, overdue, onComplete, onPostpone }: { task: Task; busy: boolean; overdue?: boolean; onComplete: () => void; onPostpone: () => void }) {
+function VisitPlanRow({ visit, busy, overdue, onPostpone, onCancel }: {
+  visit: PlannedVisit; busy: boolean; overdue?: boolean; onPostpone: () => void; onCancel: () => void;
+}) {
+  const checkinHref = visit.customer_id
+    ? `/crm/sfa?customer_id=${visit.customer_id}&visit_id=${visit.id}`
+    : `/crm/sfa?visit_id=${visit.id}`;
   return (
     <div className="flex items-start justify-between gap-2 py-2">
       <div className="min-w-0 flex-1">
-        <div className="text-sm text-gray-800">{task.description ?? "Follow-up"}</div>
+        <div className="text-sm text-gray-800 truncate">{visit.display_name}</div>
         <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-          {task.due_at && <span className={overdue ? "text-red-600 font-medium" : ""}>{formatDateVN(task.due_at)}</span>}
-          {task.customer_id && <Link href={`/crm/customers/${task.customer_id}`} className="text-blue-500 hover:underline">KH</Link>}
-          {task.lead_id && <Link href="/leads" className="text-blue-500 hover:underline">Lead</Link>}
-        </div>
-      </div>
-      <TaskActions busy={busy} onComplete={onComplete} onPostpone={onPostpone} completeLabel="Đã gọi" />
-    </div>
-  );
-}
-
-function VisitPlanRow({ task, busy, overdue, onComplete, onPostpone }: { task: Task; busy: boolean; overdue?: boolean; onComplete: () => void; onPostpone: () => void }) {
-  const checkinHref = task.customer_id ? `/crm/sfa?customer_id=${task.customer_id}&task_id=${task.id}` : `/crm/sfa?task_id=${task.id}`;
-  return (
-    <div className="flex items-start justify-between gap-2 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-gray-800">{task.description ?? "Ghé thăm"}</div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-          {task.due_at && <span className={overdue ? "text-red-600 font-medium" : ""}>{formatDateVN(task.due_at)}</span>}
-          {task.customer_id && <Link href={`/crm/customers/${task.customer_id}`} className="text-blue-500 hover:underline">KH</Link>}
+          <span className={overdue ? "text-red-600 font-medium" : ""}>{formatDateTimeVN(visit.checkin_at)}</span>
+          {visit.note && <span className="truncate text-gray-500">· {visit.note}</span>}
         </div>
       </div>
       <div className="flex gap-1 shrink-0">
@@ -480,38 +406,32 @@ function VisitPlanRow({ task, busy, overdue, onComplete, onPostpone }: { task: T
           className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">Check-in</Link>
         <button onClick={onPostpone} disabled={busy}
           className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded hover:bg-amber-200 disabled:opacity-50">+1d</button>
+        <button onClick={onCancel} disabled={busy}
+          className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-200 disabled:opacity-50">Huỷ</button>
       </div>
     </div>
   );
 }
 
-function QuotationRow({ task, busy, onComplete, onPostpone }: { task: Task; busy: boolean; onComplete: () => void; onPostpone: () => void }) {
+function FollowupRow({ visit }: { visit: FollowupVisit }) {
+  const href = visit.customer_id
+    ? `/crm/sfa?customer_id=${visit.customer_id}&visit_id=${visit.id}`
+    : `/crm/sfa?visit_id=${visit.id}`;
   return (
-    <div className="flex items-start justify-between gap-2 py-2">
+    <Link href={href} className="flex items-start justify-between gap-2 py-2 -mx-1 px-1 hover:bg-gray-50 rounded">
       <div className="min-w-0 flex-1">
-        <div className="text-sm text-gray-800">{task.description ?? "Theo báo giá"}</div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-          {task.due_at && <span>{formatDateVN(task.due_at)}</span>}
-          {task.opportunity_id && <Link href="/crm/opportunities" className="text-blue-500 hover:underline">Cơ hội</Link>}
+        <div className="text-sm text-gray-800 truncate flex items-center gap-1.5">
+          <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+          {visit.display_name}
+        </div>
+        {visit.note && <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{visit.note}</div>}
+        <div className="text-[10px] text-amber-600 mt-0.5">
+          Cần follow-up
+          {visit.days_since != null && visit.days_since > 0 ? ` · ${visit.days_since}n trước` : " · hôm nay"}
         </div>
       </div>
-      <TaskActions busy={busy} onComplete={onComplete} onPostpone={onPostpone} />
-    </div>
-  );
-}
-
-function DebtRow({ task, busy, onComplete, onPostpone }: { task: Task; busy: boolean; onComplete: () => void; onPostpone: () => void }) {
-  return (
-    <div className="flex items-start justify-between gap-2 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-gray-800">{task.description ?? "Thu nợ"}</div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-          {task.due_at && <span>{formatDateVN(task.due_at)}</span>}
-          {task.customer_id && <Link href={`/crm/customers/${task.customer_id}`} className="text-blue-500 hover:underline">KH</Link>}
-        </div>
-      </div>
-      <TaskActions busy={busy} onComplete={onComplete} onPostpone={onPostpone} completeLabel="Đã thu" />
-    </div>
+      <ArrowRight className="h-3.5 w-3.5 text-gray-300 shrink-0 mt-1" />
+    </Link>
   );
 }
 
@@ -521,7 +441,7 @@ function PlanVisitModal({ customers, onClose, onCreated }: {
   onCreated: () => void;
 }) {
   const [customerId, setCustomerId] = useState("");
-  const [dueAt, setDueAt] = useState(() => {
+  const [scheduledAt, setScheduledAt] = useState(() => {
     const d = new Date();
     d.setHours(10, 0, 0, 0);
     return d.toISOString().slice(0, 16);
@@ -534,14 +454,14 @@ function PlanVisitModal({ customers, onClose, onCreated }: {
     e.preventDefault();
     if (!customerId) { setError("Chọn khách hàng"); return; }
     setSaving(true); setError(null);
-    const res = await fetch("/api/crm-tasks", {
+    const res = await fetch("/api/sfa-visits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: "visit",
-        description: note.trim() || "Ghé thăm khách hàng",
-        customer_id: customerId,
-        due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
+        mode:         "plan",
+        customer_id:  customerId,
+        scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+        note:         note.trim() || null,
       }),
     });
     const json = await res.json();
@@ -565,7 +485,7 @@ function PlanVisitModal({ customers, onClose, onCreated }: {
         </div>
         <div>
           <label className="text-xs font-medium text-gray-600">Giờ dự kiến</label>
-          <input type="datetime-local" value={dueAt} onChange={e => setDueAt(e.target.value)}
+          <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
             className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
         </div>
         <div>

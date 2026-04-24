@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Aggregated "Today" view for sales reps.
- * Returns everything a salesperson needs to see on a single screen:
- *  - calls/follow-ups due today + overdue
- *  - visits planned for today + overdue planned visits
- *  - visits actually done today
- *  - stale leads (active, no activity > 7d)
- *  - opportunities needing action (stuck in quoted/negotiating > 5d, OR expected_close_date <= today)
- *  - customers overdue for follow-up (next_follow_up_at < now)
- *  - customers with overdue debt
+ *
+ * NOTE ON DATA SOURCES:
+ *   The public.tasks table is reserved for the order workflow
+ *   (confirm_order / prepare_order / deliver_order) and its CHECK constraint
+ *   rejects CRM/SFA types. Therefore this endpoint never reads CRM work from
+ *   tasks. Planned visits and follow-ups live on sfa_visits:
+ *     - planned visit:    result IS NULL AND checkout_at IS NULL, checkin_at = scheduled time
+ *     - followup needed:  result = 'followup_needed'
  *
  * Scoped to current user unless admin/manager — matches /api/crm-dashboard logic.
  */
@@ -38,28 +40,40 @@ export async function GET(request: Request) {
   const tomorrowISO = tomorrowStart.toISOString();
   const nowISO = now.toISOString();
 
-  // Tasks for this user — active CRM types only.
-  const tasksQuery = supabase
-    .from("tasks")
-    .select("id, type, status, description, lead_id, customer_id, opportunity_id, owner_user_id, due_at, created_at, ref_type, ref_id")
+  // Planned visits (not yet checked-in): result IS NULL AND checkout_at IS NULL.
+  // checkin_at holds the scheduled time.
+  let plannedVisitsQuery = supabase
+    .from("sfa_visits")
+    .select("id, customer_id, lead_id, owner_user_id, checkin_at, note, customers(name), leads(name)")
     .eq("org_id", orgId)
-    .in("status", ["todo", "in_progress"])
-    .in("type", ["crm_followup", "visit", "quotation_followup", "debt_followup"])
-    .order("due_at", { ascending: true, nullsFirst: false })
-    .limit(200);
+    .is("result", null)
+    .is("checkout_at", null)
+    .lt("checkin_at", tomorrowISO)
+    .order("checkin_at", { ascending: true })
+    .limit(100);
+  if (!isAdmin) plannedVisitsQuery = plannedVisitsQuery.eq("owner_user_id", user.id);
 
-  const scopedTasks = isAdmin ? tasksQuery : tasksQuery.eq("owner_user_id", user.id);
-
-  // Visits done today (actual check-ins — checkin_at in past, today).
+  // Visits done today (actual check-ins — have a result and happened today).
   let visitsDoneQuery = supabase
     .from("sfa_visits")
     .select("id, customer_id, lead_id, owner_user_id, checkin_at, result, note, customers(name), leads(name)")
     .eq("org_id", orgId)
+    .not("result", "is", null)
     .gte("checkin_at", todayISO)
     .lte("checkin_at", nowISO)
     .order("checkin_at", { ascending: false })
     .limit(50);
   if (!isAdmin) visitsDoneQuery = visitsDoneQuery.eq("owner_user_id", user.id);
+
+  // Follow-ups needed: visits where result = followup_needed.
+  let followupsQuery = supabase
+    .from("sfa_visits")
+    .select("id, customer_id, lead_id, owner_user_id, checkin_at, note, customers(name), leads(name)")
+    .eq("org_id", orgId)
+    .eq("result", "followup_needed")
+    .order("checkin_at", { ascending: false })
+    .limit(50);
+  if (!isAdmin) followupsQuery = followupsQuery.eq("owner_user_id", user.id);
 
   // Stale leads — active pipeline, no update > 7 days.
   let staleLeadsQuery = supabase
@@ -101,15 +115,17 @@ export async function GET(request: Request) {
   if (!isAdmin) dormantQuery = dormantQuery.eq("assigned_user_id", user.id);
 
   const [
-    tasksRes,
+    plannedVisitsRes,
     visitsDoneRes,
+    followupsRes,
     staleLeadsRes,
     oppsStuckRes,
     customersOverdueRes,
     dormantCustomersRes,
   ] = await Promise.all([
-    scopedTasks,
+    plannedVisitsQuery,
     visitsDoneQuery,
+    followupsQuery,
     staleLeadsQuery,
     oppsStuckQuery,
     customersOverdueQuery,
@@ -128,7 +144,6 @@ export async function GET(request: Request) {
 
     const withRecent = new Set((recentOrders ?? []).map((o: any) => o.customer_id));
 
-    // Fetch last order date for dormant customers (those without a recent order).
     const stillDormant = (dormantCustomersRes.data ?? []).filter((c: any) => !withRecent.has(c.id));
     if (stillDormant.length > 0) {
       const { data: lastOrders } = await supabase
@@ -154,44 +169,29 @@ export async function GET(request: Request) {
     }
   }
 
-  // Split tasks by type + urgency buckets.
-  const tasks = tasksRes.data ?? [];
-
-  const callsOverdue: any[] = [];
-  const callsToday: any[] = [];
+  // Split planned visits by overdue/today.
+  const plannedVisits = plannedVisitsRes.data ?? [];
   const visitsPlannedOverdue: any[] = [];
   const visitsPlannedToday: any[] = [];
-  const quotationsToday: any[] = [];
-  const debtsToday: any[] = [];
-  const upcoming: any[] = [];
-
-  for (const t of tasks) {
-    const due = t.due_at ? new Date(t.due_at) : null;
-    const isOverdue = due ? due < todayStart : false;
-    const isToday = due ? due >= todayStart && due < tomorrowStart : false;
-
-    if (t.type === "visit") {
-      if (isOverdue) visitsPlannedOverdue.push(t);
-      else if (isToday) visitsPlannedToday.push(t);
-      else if (!due) visitsPlannedToday.push(t);
-      else upcoming.push(t);
-    } else if (t.type === "quotation_followup") {
-      if (isOverdue || isToday || !due) quotationsToday.push(t);
-      else upcoming.push(t);
-    } else if (t.type === "debt_followup") {
-      if (isOverdue || isToday || !due) debtsToday.push(t);
-      else upcoming.push(t);
-    } else {
-      // crm_followup = call / generic
-      if (isOverdue) callsOverdue.push(t);
-      else if (isToday || !due) callsToday.push(t);
-      else upcoming.push(t);
-    }
+  for (const v of plannedVisits) {
+    const scheduled = v.checkin_at ? new Date(v.checkin_at) : null;
+    const item = {
+      ...v,
+      display_name: (v.customers as any)?.name ?? (v.leads as any)?.name ?? "—",
+    };
+    if (!scheduled || scheduled < todayStart) visitsPlannedOverdue.push(item);
+    else visitsPlannedToday.push(item);
   }
 
   const visits = (visitsDoneRes.data ?? []).map((v: any) => ({
     ...v,
     display_name: v.customers?.name ?? v.leads?.name ?? "—",
+  }));
+
+  const followupsNeeded = (followupsRes.data ?? []).map((v: any) => ({
+    ...v,
+    display_name: v.customers?.name ?? v.leads?.name ?? "—",
+    days_since: v.checkin_at ? Math.floor((now.getTime() - new Date(v.checkin_at).getTime()) / 86_400_000) : null,
   }));
 
   const stuckOpps = (oppsStuckRes.data ?? []).map((o: any) => ({
@@ -212,13 +212,10 @@ export async function GET(request: Request) {
   }));
 
   const summary = {
-    calls_total: callsOverdue.length + callsToday.length,
-    calls_overdue: callsOverdue.length,
     visits_planned: visitsPlannedOverdue.length + visitsPlannedToday.length,
     visits_overdue: visitsPlannedOverdue.length,
     visits_done_today: visits.length,
-    quotations_todo: quotationsToday.length,
-    debts_todo: debtsToday.length,
+    followups_needed: followupsNeeded.length,
     stale_leads: staleLeads.length,
     stuck_opps: stuckOpps.length,
     customers_overdue: customersOverdue.length,
@@ -229,15 +226,12 @@ export async function GET(request: Request) {
     ok: true,
     data: {
       summary,
-      calls: { overdue: callsOverdue, today: callsToday },
       visits: {
         planned_overdue: visitsPlannedOverdue,
         planned_today: visitsPlannedToday,
         done_today: visits,
+        followup_needed: followupsNeeded,
       },
-      quotations: quotationsToday,
-      debts: debtsToday,
-      upcoming,
       stale_leads: staleLeads,
       stuck_opportunities: stuckOpps,
       customers_overdue: customersOverdue,

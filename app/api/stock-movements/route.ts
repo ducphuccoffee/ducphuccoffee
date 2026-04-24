@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
 

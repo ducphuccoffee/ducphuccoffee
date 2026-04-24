@@ -15,7 +15,6 @@ type Customer = { id: string; name: string; phone: string | null; address: strin
 
 const ACTIVITY_LABEL: Record<string, string> = { call: "Gọi", message: "Nhắn tin", meeting: "Gặp", visit: "Ghé thăm", quotation: "Báo giá", note: "Ghi chú" };
 const RESULT_LABEL: Record<string, string> = { no_answer: "Không gặp", met_owner: "Gặp chủ", sampled: "Gửi sample", quoted: "Báo giá", followup_needed: "Cần F/U", won: "Chốt", lost: "Mất" };
-const TASK_LABEL: Record<string, string> = { crm_followup: "Follow-up", visit: "Ghé thăm", quotation_followup: "Theo báo giá", debt_followup: "Thu nợ" };
 const STAGE_LABEL: Record<string, string> = { new: "Mới", consulting: "Tư vấn", demo: "Demo", quoted: "Báo giá", negotiating: "Đàm phán", won: "Thắng", lost: "Mất" };
 
 export function CustomerDetailClient({ customerId }: { customerId: string }) {
@@ -28,11 +27,15 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
   const [debt, setDebt] = useState<Debt | null>(null);
   const [loading, setLoading] = useState(true);
   const [showActivityForm, setShowActivityForm] = useState(false);
-  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showPlanForm, setShowPlanForm] = useState(false);
   const [actType, setActType] = useState("call");
   const [actContent, setActContent] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [taskType, setTaskType] = useState("crm_followup");
+  const [planNote, setPlanNote] = useState("");
+  const [planScheduledAt, setPlanScheduledAt] = useState(() => {
+    const d = new Date();
+    d.setHours(10, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
   const [saving, setSaving] = useState(false);
 
   function load() {
@@ -42,18 +45,30 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
       fetch(`/api/crm-activities?customer_id=${customerId}`).then(r => r.json()),
       fetch(`/api/sfa-visits?customer_id=${customerId}`).then(r => r.json()),
       fetch(`/api/opportunities?customer_id=${customerId}`).then(r => r.json()),
-      fetch(`/api/crm-tasks?customer_id=${customerId}`).then(r => r.json()),
       fetch(`/api/orders?customer_id=${customerId}`).then(r => r.json()),
       fetch(`/api/customer-debt`).then(r => r.json()),
-    ]).then(([cust, act, vis, opp, tsk, ord, dbt]) => {
+    ]).then(([cust, act, vis, opp, ord, dbt]) => {
       if (cust.data) {
         const c = Array.isArray(cust.data) ? cust.data.find((x: any) => x.id === customerId) : cust.data;
         setCustomer(c ?? null);
       }
       setActivities(act.data ?? []);
-      setVisits((vis.data ?? []).map((v: any) => ({ ...v })));
+      const allVisits = (vis.data ?? []) as any[];
+      setVisits(allVisits.map((v: any) => ({ ...v })));
+      // Planned visits (no result, no checkout) become the "tasks" list for this customer.
+      setTasks(
+        allVisits
+          .filter((v: any) => v.result == null && v.checkout_at == null)
+          .map((v: any) => ({
+            id: v.id,
+            type: "visit",
+            status: "todo",
+            description: v.note,
+            due_at: v.checkin_at,
+            created_at: v.created_at ?? v.checkin_at,
+          }))
+      );
       setOpps(opp.data ?? []);
-      setTasks(tsk.data ?? []);
       setOrders(ord.data ?? []);
       const debtRow = (dbt.data ?? []).find((d: any) => d.customer_id === customerId);
       setDebt(debtRow ?? null);
@@ -72,20 +87,27 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
     setSaving(false); setShowActivityForm(false); setActContent(""); load();
   }
 
-  async function addTask(e: React.FormEvent) {
+  async function planVisit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch("/api/crm-tasks", {
+    await fetch("/api/sfa-visits", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customer_id: customerId, type: taskType, description: taskDesc }),
+      body: JSON.stringify({
+        mode:         "plan",
+        customer_id:  customerId,
+        scheduled_at: planScheduledAt ? new Date(planScheduledAt).toISOString() : undefined,
+        note:         planNote.trim() || null,
+      }),
     });
-    setSaving(false); setShowTaskForm(false); setTaskDesc(""); load();
+    setSaving(false); setShowPlanForm(false); setPlanNote(""); load();
   }
 
   async function completeTask(id: string) {
-    await fetch(`/api/crm-tasks?id=${id}`, {
+    // Planned visits are sfa_visits rows — "closing" one means marking it lost
+    // (cancelled) to take it off the planned list without losing the history.
+    await fetch(`/api/sfa-visits?id=${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({ result: "lost", note: "(đã huỷ từ trang KH)" }),
     });
     load();
   }
@@ -132,21 +154,24 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
       {/* Quick actions */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setShowActivityForm(true)} className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs text-gray-700 hover:bg-gray-50"><MessageSquare className="h-3 w-3" />Ghi hoạt động</button>
-        <button onClick={() => setShowTaskForm(true)} className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs text-gray-700 hover:bg-gray-50"><CheckSquare className="h-3 w-3" />Tạo F/U task</button>
+        <button onClick={() => setShowPlanForm(true)} className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs text-gray-700 hover:bg-gray-50"><CheckSquare className="h-3 w-3" />Lên kế hoạch visit</button>
         <Link href={`/crm/opportunities?customer_id=${customerId}`} className="flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs text-gray-700 hover:bg-gray-50"><Target className="h-3 w-3" />Tạo cơ hội</Link>
       </div>
 
-      {/* Tasks */}
+      {/* Planned visits (derived from sfa_visits with result IS NULL) */}
       {tasks.length > 0 && (
-        <Section title="Follow-up tasks" icon={<CheckSquare className="h-4 w-4" />} count={tasks.length}>
+        <Section title="Kế hoạch ghé thăm" icon={<CheckSquare className="h-4 w-4" />} count={tasks.length}>
           {tasks.map(t => (
             <div key={t.id} className="flex items-start justify-between gap-2 py-1.5">
               <div className="min-w-0">
-                <span className="text-[10px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded mr-1">{TASK_LABEL[t.type] ?? t.type}</span>
+                <span className="text-[10px] bg-orange-100 text-orange-700 px-1 py-0.5 rounded mr-1">Ghé thăm</span>
                 <span className="text-sm text-gray-700">{t.description ?? "—"}</span>
                 {t.due_at && <span className="text-[10px] text-gray-400 ml-2">{formatDateVN(t.due_at)}</span>}
               </div>
-              <button onClick={() => completeTask(t.id)} className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded hover:bg-green-200 shrink-0">Xong</button>
+              <div className="flex gap-1 shrink-0">
+                <Link href={`/crm/sfa?customer_id=${customerId}&visit_id=${t.id}`} className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded hover:bg-blue-700">Check-in</Link>
+                <button onClick={() => completeTask(t.id)} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-200">Huỷ</button>
+              </div>
             </div>
           ))}
         </Section>
@@ -225,23 +250,22 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
         </Modal>
       )}
 
-      {/* Task form modal */}
-      {showTaskForm && (
-        <Modal onClose={() => setShowTaskForm(false)} title="Tạo follow-up task">
-          <form onSubmit={addTask} className="space-y-3">
+      {/* Plan visit modal */}
+      {showPlanForm && (
+        <Modal onClose={() => setShowPlanForm(false)} title="Lên kế hoạch ghé thăm">
+          <form onSubmit={planVisit} className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-gray-600">Loại</label>
-              <select value={taskType} onChange={e => setTaskType(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                {Object.entries(TASK_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <label className="text-xs font-medium text-gray-600">Giờ dự kiến</label>
+              <input type="datetime-local" value={planScheduledAt} onChange={e => setPlanScheduledAt(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600">Mô tả</label>
-              <input value={taskDesc} onChange={e => setTaskDesc(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder="Gọi lại hỏi phản hồi..." />
+              <label className="text-xs font-medium text-gray-600">Ghi chú</label>
+              <input value={planNote} onChange={e => setPlanNote(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder="Chào hàng sản phẩm mới..." />
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setShowTaskForm(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600">Huỷ</button>
-              <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "..." : "Tạo"}</button>
+              <button type="button" onClick={() => setShowPlanForm(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600">Huỷ</button>
+              <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "..." : "Lên kế hoạch"}</button>
             </div>
           </form>
         </Modal>

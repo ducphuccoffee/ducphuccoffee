@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 
+/**
+ * CRM tasks endpoint.
+ *
+ * IMPORTANT: public.tasks has a CHECK constraint that only allows
+ * order-workflow types (confirm_order / prepare_order / deliver_order).
+ * CRM/SFA work is NOT stored here:
+ *   - planned visits        → sfa_visits (result IS NULL, checkout_at IS NULL)
+ *   - completed visits      → sfa_visits (result IS NOT NULL)
+ *   - visit follow-ups      → sfa_visits.result = 'followup_needed'
+ *   - lead / opportunity    → derived in /api/sales-today from leads/opportunities
+ *     reminders               directly (no persisted reminder rows)
+ *   - activity log          → crm_activities
+ *
+ * POST on this route is therefore disabled. GET is kept (returns empty) so
+ * callers that still query it don't 500. PATCH is kept so legacy CRM tasks
+ * that may already exist from before the constraint audit can still be
+ * closed out.
+ */
+
 const CRM_TYPES = ["crm_followup", "visit", "quotation_followup", "debt_followup"];
 
 export async function GET(request: Request) {
@@ -35,46 +54,20 @@ export async function GET(request: Request) {
   if (oppId) q = q.eq("opportunity_id", oppId);
 
   const { data, error } = await q;
+  // In practice this always returns [] because tasks_type_check rejects
+  // CRM types. We still run the query so RLS errors surface correctly.
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true, data });
 }
 
-export async function POST(request: Request) {
-  const supabase = createRouteSupabase(request, NextResponse.json({}));
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
-
-  const { data: member } = await supabase
-    .from("org_members").select("org_id").eq("user_id", user.id).eq("is_active", true).limit(1).maybeSingle();
-  if (!member?.org_id) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
-
-  const body = await request.json().catch(() => ({}));
-  const type = body.type || "crm_followup";
-  if (!CRM_TYPES.includes(type))
-    return NextResponse.json({ error: `type phải là: ${CRM_TYPES.join(", ")}` }, { status: 400 });
-
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      org_id:         member.org_id,
-      type,
-      status:         "todo",
-      role:           "sales",
-      ref_type:       body.ref_type || null,
-      ref_id:         body.ref_id || null,
-      lead_id:        body.lead_id || null,
-      customer_id:    body.customer_id || null,
-      opportunity_id: body.opportunity_id || null,
-      owner_user_id:  body.owner_user_id || user.id,
-      description:    body.description?.trim() || null,
-      due_at:         body.due_at || null,
-      created_by:     user.id,
-    })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true, data });
+export async function POST() {
+  return NextResponse.json(
+    {
+      error: "CRM tasks are no longer stored in the tasks table. Use /api/sfa-visits (mode=plan) for planned visits. Follow-ups live on sfa_visits.result.",
+      code: "crm_tasks_disabled",
+    },
+    { status: 410 },
+  );
 }
 
 export async function PATCH(request: Request) {

@@ -61,19 +61,10 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Auto-create first follow-up task
-  await supabase.from("tasks").insert({
-    org_id:        member.org_id,
-    type:          "crm_followup",
-    status:        "todo",
-    role:          "sales",
-    ref_type:      "lead",
-    ref_id:        lead.id,
-    lead_id:       lead.id,
-    owner_user_id: lead.owner_user_id,
-    description:   `Liên hệ lead mới: ${lead.name}`,
-    created_by:    user.id,
-  });
+  // NOTE: we do NOT insert into tasks — the tasks CHECK constraint only allows
+  // order-workflow types (confirm_order / prepare_order / deliver_order).
+  // New-lead follow-ups are surfaced by /api/sales-today via the stale-lead
+  // query (lead with no activity in the active pipeline).
 
   return NextResponse.json({ ok: true, data: lead });
 }
