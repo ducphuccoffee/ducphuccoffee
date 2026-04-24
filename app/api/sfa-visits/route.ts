@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const owner = searchParams.get("owner_user_id");
   const planned = searchParams.get("planned") === "true";
   const followup = searchParams.get("followup_needed") === "true";
+  const done = searchParams.get("done") === "true";
 
   let q = supabase
     .from("sfa_visits")
@@ -35,6 +36,10 @@ export async function GET(request: Request) {
   }
   if (followup) {
     q = q.eq("result", "followup_needed");
+  }
+  if (done) {
+    // Done visits: result IS NOT NULL (actual check-ins, not planned rows).
+    q = q.not("result", "is", null);
   }
 
   const { data, error } = await q;

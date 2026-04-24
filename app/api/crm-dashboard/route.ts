@@ -22,6 +22,11 @@ export async function GET(request: Request) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
+  // Configurable CRM thresholds (org_settings → orgs.settings.crm).
+  const { data: orgRow } = await supabase.from("orgs").select("settings").eq("id", orgId).maybeSingle();
+  const crmCfg = (orgRow?.settings as any)?.crm ?? {};
+  const stuckOppDays = Math.max(1, Number(crmCfg.stuck_opp_days) || 5);
+
   // Parallel queries
   const ownerFilter = (q: any) => isAdmin ? q : q.eq("owner_user_id", user.id);
 
@@ -107,9 +112,8 @@ export async function GET(request: Request) {
   // Alerts
   const alerts: { type: string; message: string; severity: "high" | "medium" }[] = [];
 
-  // High-value lead inactive: any lead with opp value >= 5M and no activity 5 days
-  // (need additional query)
-  const fiveDaysAgo = new Date(now.getTime() - 5 * 86_400_000).toISOString();
+  // High-value lead inactive: any lead with opp value >= 5M and no activity > stuckOppDays.
+  const fiveDaysAgo = new Date(now.getTime() - stuckOppDays * 86_400_000).toISOString();
   const { data: staleHighLeads } = await supabase
     .from("leads")
     .select("id, name")
@@ -119,7 +123,7 @@ export async function GET(request: Request) {
     .limit(10);
 
   for (const lead of staleHighLeads ?? []) {
-    alerts.push({ type: "stale_lead", message: `Lead "${lead.name}" không hoạt động > 5 ngày`, severity: "medium" });
+    alerts.push({ type: "stale_lead", message: `Lead "${lead.name}" không hoạt động > ${stuckOppDays} ngày`, severity: "medium" });
   }
 
   // Big opportunity stuck

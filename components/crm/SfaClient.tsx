@@ -102,7 +102,10 @@ export function SfaClient({
 
   function loadVisits() {
     setLoading(true);
-    fetch("/api/sfa-visits")
+    // Only load *done* visits (result IS NOT NULL). Planned rows go in the
+    // "Kế hoạch ghé thăm hôm nay" section above — showing them here too would
+    // double-up and confuse the history (future checkin_at with no result badge).
+    fetch("/api/sfa-visits?done=true")
       .then(r => r.json())
       .then(res => {
         if (res.ok) {

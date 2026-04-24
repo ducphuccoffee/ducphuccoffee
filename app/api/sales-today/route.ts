@@ -29,12 +29,19 @@ export async function GET(request: Request) {
   const isAdmin = ["admin", "manager", "roastery_manager"].includes(profile?.role ?? "");
   const orgId = member.org_id;
 
+  // Load org-configured CRM thresholds (with safe defaults).
+  const { data: orgRow } = await supabase.from("orgs").select("settings").eq("id", orgId).maybeSingle();
+  const crmCfg = (orgRow?.settings as any)?.crm ?? {};
+  const staleLeadDays       = Math.max(1, Number(crmCfg.stale_lead_days)       || 7);
+  const stuckOppDays        = Math.max(1, Number(crmCfg.stuck_opp_days)        || 5);
+  const dormantCustomerDays = Math.max(1, Number(crmCfg.dormant_customer_days) || 60);
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tomorrowStart = new Date(todayStart.getTime() + 86_400_000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const fiveDaysAgo = new Date(now.getTime() - 5 * 86_400_000);
-  const sixtyDaysAgo = new Date(now.getTime() - 60 * 86_400_000);
+  const sevenDaysAgo = new Date(now.getTime() - staleLeadDays * 86_400_000);
+  const fiveDaysAgo = new Date(now.getTime() - stuckOppDays * 86_400_000);
+  const sixtyDaysAgo = new Date(now.getTime() - dormantCustomerDays * 86_400_000);
 
   const todayISO = todayStart.toISOString();
   const tomorrowISO = tomorrowStart.toISOString();
@@ -163,7 +170,7 @@ export async function GET(request: Request) {
           const daysSince = lastOrder ? Math.floor((now.getTime() - new Date(lastOrder).getTime()) / 86_400_000) : null;
           return { ...c, last_order_at: lastOrder, days_since_last_order: daysSince };
         })
-        .filter((c) => c.days_since_last_order == null || c.days_since_last_order >= 60)
+        .filter((c) => c.days_since_last_order == null || c.days_since_last_order >= dormantCustomerDays)
         .sort((a, b) => (b.days_since_last_order ?? 999) - (a.days_since_last_order ?? 999))
         .slice(0, 10);
     }
