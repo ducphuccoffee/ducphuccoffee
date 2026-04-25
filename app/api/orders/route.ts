@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
 import { createClient } from "@supabase/supabase-js";
 import { ORDER_STATUSES } from "@/lib/order-constants";
+import { writeAudit } from "@/lib/audit";
 
 // Service-role client — bypasses RLS for order_items insert
 function createServiceClient() {
@@ -157,6 +158,20 @@ export async function POST(request: Request) {
   });
   if (taskErr) console.error("[orders] confirm_order task insert failed:", taskErr.message);
 
+  await writeAudit({
+    orgId: member.org_id,
+    actorId: user.id,
+    action: "order.create",
+    entityType: "order",
+    entityId: order.id,
+    meta: {
+      total_amount: totalAmount,
+      total_qty_kg: totalQtyKg,
+      customer_id: resolvedCustomerId,
+      item_count: validItems.length,
+    },
+  });
+
   return NextResponse.json({
     ok: true,
     task_error: taskErr?.message ?? null,
@@ -188,6 +203,10 @@ export async function PATCH(request: Request) {
   if (Object.keys(patch).length === 0)
     return NextResponse.json({ error: "Không có field hợp lệ để cập nhật" }, { status: 400 });
 
+  // Snapshot prior state for audit
+  const { data: prior } = await supabase
+    .from("orders").select("status, org_id").eq("id", id).maybeSingle();
+
   const { data, error } = await supabase
     .from("orders")
     .update(patch)
@@ -195,6 +214,20 @@ export async function PATCH(request: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (data && prior?.org_id) {
+    const { data: { user: actor } } = await supabase.auth.getUser();
+    if (actor) {
+      await writeAudit({
+        orgId: prior.org_id,
+        actorId: actor.id,
+        action: "order.update_status",
+        entityType: "order",
+        entityId: id,
+        meta: { from: prior.status, to: patch.status },
+      });
+    }
+  }
 
   // Auto-create commission when order completed/delivered
   if (patch.status && ["completed", "delivered"].includes(patch.status) && data) {
@@ -246,7 +279,32 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
+
+  const { data: prior } = await supabase
+    .from("orders")
+    .select("org_id, total_amount, status, customer_id")
+    .eq("id", id).maybeSingle();
+
   const { error } = await supabase.from("orders").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (prior?.org_id) {
+    const { data: { user: actor } } = await supabase.auth.getUser();
+    if (actor) {
+      await writeAudit({
+        orgId: prior.org_id,
+        actorId: actor.id,
+        action: "order.delete",
+        entityType: "order",
+        entityId: id,
+        meta: {
+          total_amount: prior.total_amount,
+          status: prior.status,
+          customer_id: prior.customer_id,
+        },
+      });
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

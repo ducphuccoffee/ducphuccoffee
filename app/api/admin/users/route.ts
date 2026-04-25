@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,24 @@ export async function PATCH(req: Request) {
     if (pwErr) return jsonError(400, { error: pwErr.message });
   }
 
+  // Audit any of: role change, activate/deactivate, password reset, profit toggle
+  const auditMeta: Record<string, any> = {};
+  if (body.role !== undefined && body.role !== target.role)
+    auditMeta.role = { from: target.role, to: body.role };
+  if (body.is_active !== undefined && !!body.is_active !== !!target.is_active)
+    auditMeta.is_active = { from: !!target.is_active, to: !!body.is_active };
+  if (body.can_view_profit !== undefined) auditMeta.can_view_profit = !!body.can_view_profit;
+  if (typeof body.password === "string") auditMeta.password_reset = true;
+  if (Object.keys(auditMeta).length > 0) {
+    await writeAudit({
+      orgId, actorId,
+      action: "user.update",
+      entityType: "user",
+      entityId: targetId,
+      meta: auditMeta,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
 
@@ -233,6 +252,14 @@ export async function POST(req: Request) {
       );
     if (memberErr) return jsonError(400, { error: memberErr.message });
 
+    await writeAudit({
+      orgId, actorId: auth.actorId,
+      action: "user.create",
+      entityType: "user",
+      entityId: newUserId,
+      meta: { mode: "username", username, role },
+    });
+
     return NextResponse.json({ ok: true, mode: "create", user_id: newUserId, username });
   }
 
@@ -255,6 +282,14 @@ export async function POST(req: Request) {
   if (memberErr) return jsonError(400, { error: memberErr.message });
 
   await admin.from("profiles").update({ role }).eq("id", newUserId);
+
+  await writeAudit({
+    orgId, actorId: auth.actorId,
+    action: "user.create",
+    entityType: "user",
+    entityId: newUserId,
+    meta: { mode: "invite", email, role },
+  });
 
   return NextResponse.json({ ok: true, mode: "invite", user_id: newUserId, email });
 }

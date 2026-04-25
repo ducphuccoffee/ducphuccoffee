@@ -6,8 +6,10 @@ import { UsersAdmin } from "./UsersAdmin";
 import { OrgAndCrmSettings } from "./OrgAndCrmSettings";
 import { UserTargets } from "./UserTargets";
 import { CommissionRules } from "./CommissionRules";
+import { StockAlertsSettings } from "./StockAlertsSettings";
+import { AuditLogViewer } from "./AuditLogViewer";
 
-type Tab = "account" | "users" | "org" | "kpi" | "commission";
+type Tab = "account" | "users" | "org" | "kpi" | "commission" | "stock" | "audit";
 
 export function SettingsTabs({
   canManage,
@@ -24,8 +26,10 @@ export function SettingsTabs({
     { id: "account",    label: "Tài khoản" },
     { id: "users",      label: "Thành viên",   adminOnly: true },
     { id: "org",        label: "Doanh nghiệp", adminOnly: true },
+    { id: "stock",      label: "Tồn kho",      adminOnly: true },
     { id: "kpi",        label: "KPI",          adminOnly: true },
     { id: "commission", label: "Hoa hồng",     adminOnly: true },
+    { id: "audit",      label: "Nhật ký",      adminOnly: true },
   ];
 
   const visible = tabs.filter(t => !t.adminOnly || canManage);
@@ -53,8 +57,10 @@ export function SettingsTabs({
       {tab === "account"    && <AccountSettings initialFullName={initialFullName} />}
       {tab === "users"      && canManage && <UsersAdmin currentUserId={currentUserId} />}
       {tab === "org"        && canManage && <OrgAndCrmSettings />}
+      {tab === "stock"      && canManage && <StockAlertsSettings />}
       {tab === "kpi"        && canManage && <UserTargets />}
       {tab === "commission" && canManage && <CommissionRules />}
+      {tab === "audit"      && canManage && <AuditLogViewer />}
     </div>
   );
 }

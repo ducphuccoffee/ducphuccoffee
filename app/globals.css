@@ -9,3 +9,9 @@
 body {
   @apply bg-zinc-50 text-zinc-900;
 }
+
+/* Print: drop background colour and shrink margins for cleaner output. */
+@media print {
+  body { background: #fff; }
+  @page { margin: 12mm; }
+}

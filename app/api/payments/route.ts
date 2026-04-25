@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase/route";
+import { writeAudit } from "@/lib/audit";
 
 export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
@@ -78,6 +79,19 @@ export async function POST(request: Request) {
   } else if (totalPaid > 0) {
     await supabase.from("orders").update({ payment_status: "partial" }).eq("id", body.order_id);
   }
+
+  await writeAudit({
+    orgId: member.org_id,
+    actorId: user.id,
+    action: "payment.create",
+    entityType: "order",
+    entityId: body.order_id,
+    meta: {
+      amount,
+      method: body.method || "cash",
+      payment_id: data.id,
+    },
+  });
 
   return NextResponse.json({ ok: true, data });
 }

@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { writeAudit } from "@/lib/audit";
+
+const ALLOWED_PATCH = [
+  "name", "sku", "kind", "unit", "weight_per_unit",
+  "price", "note", "is_active", "green_type_id",
+  "packaging_cost", "min_stock",
+];
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -86,9 +93,8 @@ export async function PATCH(req: Request) {
 
   const body = await req.json();
 
-  const ALLOWED = ["name", "sku", "kind", "unit", "weight_per_unit", "price", "note", "is_active", "green_type_id", "packaging_cost"];
   const patch: Record<string, any> = {};
-  for (const key of ALLOWED) {
+  for (const key of ALLOWED_PATCH) {
     if (!(key in body)) continue;
     if (key === "green_type_id") {
       patch.green_type_id = body.green_type_id || null;
@@ -101,6 +107,15 @@ export async function PATCH(req: Request) {
         if (isNaN(n)) return NextResponse.json({ error: "packaging_cost không hợp lệ" }, { status: 400 });
         patch.packaging_cost = n;
       }
+    } else if (key === "min_stock") {
+      const v = body.min_stock;
+      if (v === null || v === undefined || v === "") {
+        patch.min_stock = null;
+      } else {
+        const n = Number(v);
+        if (isNaN(n) || n < 0) return NextResponse.json({ error: "min_stock không hợp lệ" }, { status: 400 });
+        patch.min_stock = n;
+      }
     } else {
       patch[key] = body[key];
     }
@@ -108,6 +123,10 @@ export async function PATCH(req: Request) {
 
   if (Object.keys(patch).length === 0)
     return NextResponse.json({ error: "Không có field hợp lệ để update" }, { status: 400 });
+
+  // Snapshot prior price for audit (price/min_stock changes are sensitive)
+  const { data: prior } = await supabase
+    .from("products").select("org_id, price, min_stock, name").eq("id", id).maybeSingle();
 
   const { data, error } = await supabase
     .from("products")
@@ -117,6 +136,28 @@ export async function PATCH(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (data && prior?.org_id) {
+    const interesting: Record<string, any> = {};
+    if ("price" in patch && Number(prior.price) !== Number(patch.price))
+      interesting.price = { from: prior.price, to: patch.price };
+    if ("min_stock" in patch && Number(prior.min_stock ?? 0) !== Number(patch.min_stock ?? 0))
+      interesting.min_stock = { from: prior.min_stock, to: patch.min_stock };
+    if (Object.keys(interesting).length > 0) {
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit({
+          orgId: prior.org_id,
+          actorId: actor.id,
+          action: "product.update",
+          entityType: "product",
+          entityId: id,
+          meta: { name: prior.name, ...interesting },
+        });
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, data });
 }
 

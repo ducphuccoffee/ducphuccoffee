@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatWeekdayDateVN } from "@/lib/date";
 import TaskBoard from "@/components/dashboard/TaskBoard";
 import { StockDashboard } from "@/components/dashboard/StockDashboard";
+import { StockAlertsCard } from "@/components/dashboard/StockAlertsCard";
 import {
   Package,
   Users,
@@ -319,8 +320,9 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stock dashboard */}
-      <div>
+      <div className="space-y-2">
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Tồn kho & Sản xuất</p>
+        <StockAlertsCard />
         <StockDashboard />
       </div>
 

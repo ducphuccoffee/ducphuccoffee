@@ -696,7 +696,18 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
                 <h2 className="text-base font-bold text-gray-800">{detailOrder.order_code}</h2>
                 <p className="text-xs text-gray-400">{formatDateTimeVN(detailOrder.created_at)}</p>
               </div>
-              <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-2xl p-1">×</button>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/print/order/${detailOrder.id}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
+                  title="Mở hoá đơn để in"
+                >
+                  🖨 In
+                </a>
+                <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-2xl p-1">×</button>
+              </div>
             </div>
             <div className="p-4 space-y-4 text-sm">
               {/* Customer info */}

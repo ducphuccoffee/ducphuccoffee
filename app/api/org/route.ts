@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_SETTINGS = {
   crm: { stale_lead_days: 7, stuck_opp_days: 5, dormant_customer_days: 60 },
   kpi: { monthly_revenue_target: 0 },
+  stock: { default_min_stock_kg: 5 },
 };
 
 async function resolveOrg(request: Request) {
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
   const settings = { ...DEFAULT_SETTINGS, ...(data?.settings ?? {}) };
   settings.crm = { ...DEFAULT_SETTINGS.crm, ...(settings.crm ?? {}) };
   settings.kpi = { ...DEFAULT_SETTINGS.kpi, ...(settings.kpi ?? {}) };
+  settings.stock = { ...DEFAULT_SETTINGS.stock, ...(settings.stock ?? {}) };
 
   return NextResponse.json({ ok: true, data: { ...data, settings } });
 }
@@ -78,6 +80,13 @@ export async function PATCH(request: Request) {
       if (n.monthly_revenue_target !== undefined)
         kpi.monthly_revenue_target = Math.max(0, Number(n.monthly_revenue_target) || 0);
       merged.kpi = kpi;
+    }
+    if (incoming.stock && typeof incoming.stock === "object") {
+      const stock = { ...(existing.stock ?? {}) };
+      const n = incoming.stock;
+      if (n.default_min_stock_kg !== undefined)
+        stock.default_min_stock_kg = Math.max(0, Number(n.default_min_stock_kg) || 0);
+      merged.stock = stock;
     }
     patch.settings = merged;
   }
