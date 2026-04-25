@@ -1,14 +1,17 @@
 import { TopBar } from "@/components/TopBar";
-import { ActivitiesClient } from "@/components/crm/ActivitiesClient";
+import { ActivityHubClient } from "@/components/crm/ActivityHubClient";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default function ActivitiesPage() {
   return (
     <div>
-      <TopBar title="Hoạt động" subtitle="CRM Activities" section="CRM" />
+      <TopBar title="Hoạt động" subtitle="Ghi nhận · Follow-up · Chăm sóc KH" section="CRM" />
       <div className="p-4">
-        <ActivitiesClient />
+        <Suspense>
+          <ActivityHubClient />
+        </Suspense>
       </div>
     </div>
   );

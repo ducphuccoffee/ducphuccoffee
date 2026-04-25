@@ -8,12 +8,10 @@ import {
   PackagePlus,
   Package,
   Users,
-  UserCheck,
   ShoppingCart,
   Factory,
   CreditCard,
   Award,
-  MapPin,
   BarChart2,
   Settings,
   Coffee,
@@ -21,13 +19,11 @@ import {
   Menu,
   X,
   PieChart,
-  HeartHandshake,
   Footprints,
-  Target,
   MessageSquare,
-  CheckSquare,
   DollarSign,
   Sun,
+  GitBranch,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -47,13 +43,10 @@ const NAV_GROUPS = [
   {
     group: "CRM",
     items: [
-      { href: "/crm/today",           label: "Việc hôm nay",   icon: Sun },
-      { href: "/crm/dashboard",       label: "CRM Dashboard",  icon: PieChart },
-      { href: "/crm/opportunities",   label: "Cơ hội",         icon: Target },
-      { href: "/crm/activities",      label: "Hoạt động",      icon: MessageSquare },
-      { href: "/crm/followups",       label: "Follow-ups",     icon: CheckSquare },
-      { href: "/crm/care",            label: "Customer Care",  icon: HeartHandshake },
-      { href: "/crm/sfa",             label: "SFA",            icon: Footprints },
+      { href: "/crm/today",      label: "Hôm nay",    icon: Sun },
+      { href: "/crm/pipeline",   label: "Pipeline",   icon: GitBranch },
+      { href: "/crm/activities", label: "Hoạt động",  icon: MessageSquare },
+      { href: "/crm/sfa",        label: "SFA",        icon: Footprints },
     ],
   },
   {
@@ -68,7 +61,6 @@ const NAV_GROUPS = [
     items: [
       { href: "/products",  label: "Sản phẩm",   icon: Package },
       { href: "/customers", label: "Khách hàng", icon: Users },
-      { href: "/leads",     label: "Leads",      icon: UserCheck },
     ],
   },
   {
