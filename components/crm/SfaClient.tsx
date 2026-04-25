@@ -236,9 +236,10 @@ export function SfaClient({
 
       {/* New visit modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={() => setShowForm(false)}>
           <form onSubmit={submit} onClick={e => e.stopPropagation()}
-            className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto p-4 space-y-3">
+            className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto p-4 space-y-3 shadow-2xl"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
             <h2 className="text-base font-bold text-gray-800">Check-in</h2>
 
             <div>
