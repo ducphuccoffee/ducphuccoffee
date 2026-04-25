@@ -250,7 +250,7 @@ export function LeadsClient() {
       </div>
 
       {/* Status filter */}
-      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
         {[
           { key: "all", label: "Tất cả" },
           { key: "active_pipeline", label: "Đang theo" },
@@ -260,9 +260,9 @@ export function LeadsClient() {
           <button
             key={f.key}
             onClick={() => setFilterStatus(f.key)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
               filterStatus === f.key
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-600 text-white shadow-sm shadow-blue-500/30"
                 : f.highlight
                   ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"

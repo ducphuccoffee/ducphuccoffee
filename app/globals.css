@@ -4,11 +4,49 @@
 
 :root {
   color-scheme: light;
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   @apply bg-zinc-50 text-zinc-900;
+  overscroll-behavior-y: none;
 }
+
+/* Prevent iOS zoom on focus by ensuring base font-size ≥16px on touch inputs.
+   Small visual sizing handled via Tailwind text-sm on the wrapper / parent. */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Slim, modern scrollbar for desktop */
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); border: 2px solid transparent; background-clip: padding-box; }
+}
+
+/* Hide scrollbar utility for horizontal pill rows (status filters, etc.) */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Print: drop background colour and shrink margins for cleaner output. */
 @media print {

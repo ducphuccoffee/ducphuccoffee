@@ -330,12 +330,12 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
       {/* ── Toolbar ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <input
-          className="border rounded-lg px-3 py-2 text-sm w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Tìm mã đơn, khách hàng..."
           value={search} onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="all">Tất cả ({statusCounts.all || 0})</option>
@@ -345,7 +345,7 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
         </select>
         <div className="flex-1" />
         <button onClick={openCreate}
-          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-blue-500/30">
           + Tạo đơn hàng
         </button>
       </div>
@@ -414,36 +414,36 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
         {filtered.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 px-4 py-12 text-center text-gray-400">
+          <div className="bg-white rounded-2xl border border-gray-200 px-4 py-12 text-center text-gray-400">
             Chưa có đơn hàng nào
           </div>
         )}
         {filtered.map((o) => (
-          <div key={o.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div key={o.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             {/* Card header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <button
-                className="font-mono text-blue-600 text-sm font-bold"
+                className="font-mono text-blue-600 text-sm font-bold active:scale-95 transition-transform"
                 onClick={() => setDetailOrder(o)}
               >
                 {o.order_code}
               </button>
               <div className="flex items-center gap-2">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLOR[o.status] ?? "bg-gray-100 text-gray-600"}`}>
+                <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${ORDER_STATUS_COLOR[o.status] ?? "bg-gray-100 text-gray-600"}`}>
                   {ORDER_STATUS_LABEL[o.status] ?? o.status}
                 </span>
                 <button onClick={() => setDeleteId(o.id)}
-                  className="text-red-400 text-xs p-1 rounded hover:bg-red-50">✕</button>
+                  className="text-red-400 w-7 h-7 rounded-full flex items-center justify-center active:bg-red-50">✕</button>
               </div>
             </div>
             {/* Card body */}
-            <div className="px-4 py-3 space-y-2">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-gray-800 text-sm">{o.customer_name}</p>
+            <div className="px-4 py-3 space-y-2.5">
+              <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-800 text-[14px] truncate">{o.customer_name}</p>
                   {o.customer_phone && <p className="text-xs text-gray-400">{o.customer_phone}</p>}
                 </div>
-                <p className="font-bold text-blue-700 text-base">{money(o.total_amount)}</p>
+                <p className="font-bold text-blue-700 text-[17px] shrink-0 leading-none mt-0.5">{money(o.total_amount)}</p>
               </div>
               {/* Status controls */}
               <div className="grid grid-cols-2 gap-2 pt-1">

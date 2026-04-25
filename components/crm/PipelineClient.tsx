@@ -25,16 +25,16 @@ export function PipelineClient() {
 
   return (
     <div>
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-4 bg-white border rounded-xl p-1 w-fit">
+      {/* Tab bar — full-width segmented on mobile, fit on desktop */}
+      <div className="flex gap-1 mb-4 bg-gray-100 border border-gray-200 rounded-xl p-1 w-full sm:w-fit">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => switchTab(t.id)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               tab === t.id
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-gray-500 active:text-gray-800 hover:text-gray-700"
             }`}
           >
             {t.label}

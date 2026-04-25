@@ -135,14 +135,14 @@ export function SalesTodayClient() {
   return (
     <div className="space-y-4 pb-10">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-gray-700">Việc cần làm hôm nay</h2>
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[15px] font-bold text-gray-800">Việc cần làm hôm nay</h2>
+        <div className="flex gap-2 shrink-0">
           <button onClick={() => setShowPlan(true)}
-            className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700">
-            <Plus className="h-3.5 w-3.5" /> Kế hoạch visit
+            className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-500/30">
+            <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Kế hoạch </span>visit
           </button>
-          <button onClick={load} className="p-1.5 border rounded-lg text-gray-500 hover:bg-gray-50" aria-label="Làm mới">
+          <button onClick={load} className="w-9 h-9 border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-50 active:scale-95 transition-all flex items-center justify-center" aria-label="Làm mới">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
@@ -262,7 +262,7 @@ export function SalesTodayClient() {
                 <div className="text-[10px] text-amber-600 mt-0.5">Không hoạt động {l.days_since_update}n</div>
               </div>
               {l.phone && (
-                <a href={`tel:${l.phone}`} className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 shrink-0">Gọi</a>
+                <a href={`tel:${l.phone}`} className="text-[11px] font-semibold bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 active:scale-95 transition-all shrink-0">📞 Gọi</a>
               )}
             </div>
           ))}
@@ -289,7 +289,7 @@ export function SalesTodayClient() {
                 )}
               </div>
               {c.phone && (
-                <a href={`tel:${c.phone}`} className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 shrink-0">Gọi</a>
+                <a href={`tel:${c.phone}`} className="text-[11px] font-semibold bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 active:scale-95 transition-all shrink-0">📞 Gọi</a>
               )}
             </div>
           ))}
@@ -314,7 +314,7 @@ export function SalesTodayClient() {
                 </div>
               </div>
               {c.phone && (
-                <a href={`tel:${c.phone}`} className="text-[10px] bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 shrink-0">Gọi</a>
+                <a href={`tel:${c.phone}`} className="text-[11px] font-semibold bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 active:scale-95 transition-all shrink-0">📞 Gọi</a>
               )}
             </div>
           ))}
@@ -337,12 +337,12 @@ export function SalesTodayClient() {
 
 function KpiTile({ label, value, sub, alert, icon }: { label: string; value: number; sub?: string; alert?: boolean; icon: React.ReactNode }) {
   return (
-    <div className={`rounded-xl border p-2.5 ${alert ? "border-red-200 bg-red-50" : "bg-white border-gray-200"}`}>
+    <div className={`rounded-2xl border p-3 ${alert ? "border-red-200 bg-red-50" : "bg-white border-gray-200"}`}>
       <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${alert ? "text-red-600" : "text-gray-400"}`}>
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className={`text-xl font-bold mt-0.5 ${alert ? "text-red-700" : "text-gray-800"}`}>{value}</div>
-      {sub && <div className="text-[10px] text-gray-400">{sub}</div>}
+      <div className={`text-2xl font-bold mt-1 leading-none ${alert ? "text-red-700" : "text-gray-800"}`}>{value}</div>
+      {sub && <div className="text-[10px] text-gray-400 mt-1">{sub}</div>}
     </div>
   );
 }
@@ -361,20 +361,20 @@ function Section({
     pink: "border-pink-200", gray: "border-gray-200", green: "border-green-200",
   };
   return (
-    <div className={`rounded-xl border bg-white ${borderClass[accent]}`}>
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+    <div className={`rounded-2xl border bg-white shadow-sm ${borderClass[accent]}`}>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
         <div className="flex items-center gap-2">
           {icon}
-          <span className="text-sm font-bold text-gray-700">{title}</span>
-          <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{count}</span>
+          <span className="text-[14px] font-bold text-gray-800">{title}</span>
+          <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-semibold">{count}</span>
         </div>
         {extraLink && (
-          <Link href={extraLink.href} className="text-[11px] text-blue-600 hover:underline">
+          <Link href={extraLink.href} className="text-[11px] text-blue-600 hover:underline font-medium">
             {extraLink.label} →
           </Link>
         )}
       </div>
-      <div className="px-3 py-2 divide-y divide-gray-100">{children}</div>
+      <div className="px-4 py-2 divide-y divide-gray-100">{children}</div>
     </div>
   );
 }
@@ -401,13 +401,13 @@ function VisitPlanRow({ visit, busy, overdue, onPostpone, onCancel }: {
           {visit.note && <span className="truncate text-gray-500">· {visit.note}</span>}
         </div>
       </div>
-      <div className="flex gap-1 shrink-0">
+      <div className="flex gap-1.5 shrink-0">
         <Link href={checkinHref}
-          className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">Check-in</Link>
+          className="text-[11px] font-semibold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 active:scale-95 transition-all">Check-in</Link>
         <button onClick={onPostpone} disabled={busy}
-          className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded hover:bg-amber-200 disabled:opacity-50">+1d</button>
+          className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-200 active:scale-95 transition-all disabled:opacity-50">+1d</button>
         <button onClick={onCancel} disabled={busy}
-          className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-200 disabled:opacity-50">Huỷ</button>
+          className="text-[11px] font-semibold bg-gray-100 text-gray-600 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50">Huỷ</button>
       </div>
     </div>
   );
