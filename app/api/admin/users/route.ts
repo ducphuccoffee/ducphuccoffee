@@ -4,17 +4,30 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-type Role = "admin" | "manager" | "roastery_manager" | "warehouse" | "sales" | "collaborator";
+type Role =
+  | "admin"
+  | "manager"
+  | "roastery_manager"
+  | "warehouse"
+  | "sales"
+  | "collaborator"
+  | "delivery";
 
-const VALID_ROLES: Role[] = ["admin", "manager", "roastery_manager", "warehouse", "sales", "collaborator"];
+const VALID_ROLES: Role[] = [
+  "admin", "manager", "roastery_manager",
+  "warehouse", "sales", "collaborator", "delivery",
+];
 
-type CreateUserBody = {
-  email?: string;
-  role?: Role;
-};
+// Internal domain used for username-based logins. Never sends real email.
+const INTERNAL_DOMAIN = "ducphuccoffee.local";
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function usernameToEmail(username: string): string {
+  return `${username.trim().toLowerCase()}@${INTERNAL_DOMAIN}`;
+}
+
+function isValidUsername(u: string) {
+  // Allow phone-like digits, dots, underscores, hyphens, letters (3–32 chars).
+  return /^[a-z0-9._-]{3,32}$/i.test(u);
 }
 
 function jsonError(status: number, payload: Record<string, any>) {
@@ -46,7 +59,7 @@ async function requireAdmin() {
   return { actorId, orgId: actorMember.org_id as string, admin } as const;
 }
 
-// GET: list members of caller's org with role, is_active, can_view_profit, full_name, email.
+// GET: list members of caller's org with role, is_active, can_view_profit, full_name, username.
 export async function GET() {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
@@ -64,35 +77,42 @@ export async function GET() {
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("id, full_name, role, can_view_profit")
+    .select("id, full_name, role, can_view_profit, username")
     .in("id", userIds);
   const profMap: Record<string, any> = {};
   for (const p of profiles ?? []) profMap[p.id] = p;
 
-  // Fetch emails via admin API (one call per page; we paginate up to 1000).
+  // Fetch emails via admin API (up to 1000 — enough for our size).
   const emailMap: Record<string, string> = {};
   try {
     const { data: usersRes } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     for (const u of usersRes?.users ?? []) if (u.id) emailMap[u.id] = u.email ?? "";
-  } catch { /* ignore — emails optional */ }
+  } catch { /* ignore */ }
 
-  const rows = (members ?? []).map((m: any) => ({
-    user_id: m.user_id,
-    email: emailMap[m.user_id] ?? null,
-    full_name: profMap[m.user_id]?.full_name ?? null,
-    // org_members.role is authoritative for org-scoped role; profiles.role is mirror.
-    role: m.role,
-    profile_role: profMap[m.user_id]?.role ?? null,
-    can_view_profit: !!profMap[m.user_id]?.can_view_profit,
-    is_active: !!m.is_active,
-    created_at: m.created_at,
-  }));
+  const rows = (members ?? []).map((m: any) => {
+    const email = emailMap[m.user_id] ?? null;
+    const usernameFromEmail = email && email.endsWith("@" + INTERNAL_DOMAIN)
+      ? email.slice(0, -("@" + INTERNAL_DOMAIN).length)
+      : null;
+    return {
+      user_id: m.user_id,
+      email,
+      username: profMap[m.user_id]?.username ?? usernameFromEmail,
+      is_internal: email ? email.endsWith("@" + INTERNAL_DOMAIN) : false,
+      full_name: profMap[m.user_id]?.full_name ?? null,
+      role: m.role,
+      profile_role: profMap[m.user_id]?.role ?? null,
+      can_view_profit: !!profMap[m.user_id]?.can_view_profit,
+      is_active: !!m.is_active,
+      created_at: m.created_at,
+    };
+  });
 
   return NextResponse.json({ ok: true, data: rows });
 }
 
-// PATCH: update role / can_view_profit / is_active for one user in caller's org.
-// Body: { user_id, role?, can_view_profit?, is_active? }
+// PATCH: update role / can_view_profit / is_active / password for one user.
+// Body: { user_id, role?, can_view_profit?, is_active?, password? (min 6) }
 export async function PATCH(req: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
@@ -102,7 +122,6 @@ export async function PATCH(req: Request) {
   const targetId = body.user_id as string | undefined;
   if (!targetId) return jsonError(400, { error: "Thiếu user_id" });
 
-  // Verify target belongs to same org
   const { data: target } = await admin
     .from("org_members")
     .select("user_id, org_id, role, is_active")
@@ -111,7 +130,6 @@ export async function PATCH(req: Request) {
     .maybeSingle();
   if (!target) return jsonError(404, { error: "Không tìm thấy thành viên trong công ty" });
 
-  // Prevent self-demotion / self-deactivation lockout.
   if (targetId === actorId) {
     if (body.role && body.role !== target.role)
       return jsonError(400, { error: "Không thể tự đổi role của chính bạn" });
@@ -138,6 +156,7 @@ export async function PATCH(req: Request) {
   const profilePatch: Record<string, any> = {};
   if (body.role !== undefined) profilePatch.role = body.role;
   if (body.can_view_profit !== undefined) profilePatch.can_view_profit = !!body.can_view_profit;
+  if (typeof body.full_name === "string") profilePatch.full_name = body.full_name.trim() || null;
 
   if (Object.keys(profilePatch).length > 0) {
     const { error: pErr } = await admin
@@ -147,110 +166,95 @@ export async function PATCH(req: Request) {
     if (pErr) return jsonError(400, { error: pErr.message });
   }
 
+  // Reset password (admin → new password)
+  if (typeof body.password === "string") {
+    if (body.password.length < 6)
+      return jsonError(400, { error: "Mật khẩu phải ít nhất 6 ký tự" });
+    const { error: pwErr } = await admin.auth.admin.updateUserById(targetId, { password: body.password });
+    if (pwErr) return jsonError(400, { error: pwErr.message });
+  }
+
   return NextResponse.json({ ok: true });
 }
 
+// POST: create user.
+// Two modes:
+//   A) Username + password (no email). Body: { username, password, role, full_name? }
+//      → creates auth user with synthetic email `{username}@ducphuccoffee.local`, email_confirm=true.
+//   B) Email invite. Body: { email, role }
+//      → sends Supabase invite email (legacy flow, still supported).
 export async function POST(req: Request) {
-  try {
-    // 0) Parse body
-    const body = (await req.json()) as CreateUserBody;
-    const safeEmail = (body.email ?? "").trim().toLowerCase();
-    const role = body.role;
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { orgId, admin } = auth;
 
-    if (!safeEmail || !isValidEmail(safeEmail)) {
-      return jsonError(400, { error: "Email không hợp lệ" });
-    }
-    if (!role || !VALID_ROLES.includes(role)) {
-      return jsonError(400, { error: "Role không hợp lệ" });
-    }
+  const body = await req.json().catch(() => ({} as any));
+  const role = body.role as Role | undefined;
+  if (!role || !VALID_ROLES.includes(role))
+    return jsonError(400, { error: "Role không hợp lệ" });
 
-    // 1) Check session người gọi (phải login)
-    const supabase = await createServerSupabaseClient();
-    const { data: meRes, error: meErr } = await supabase.auth.getUser();
+  // Mode A — direct create with username + password.
+  if (typeof body.username === "string" && body.username.trim() !== "") {
+    const username = body.username.trim().toLowerCase();
+    if (!isValidUsername(username))
+      return jsonError(400, { error: "Tên đăng nhập chỉ gồm chữ/số/._- (3–32 ký tự)" });
+    const password = typeof body.password === "string" ? body.password : "";
+    if (password.length < 6)
+      return jsonError(400, { error: "Mật khẩu phải ít nhất 6 ký tự" });
 
-    if (meErr || !meRes?.user) {
-      return jsonError(401, { error: "Unauthorized" });
-    }
-    const actorId = meRes.user.id;
+    // Pre-check duplicate username in profiles.
+    const { data: dup } = await admin
+      .from("profiles").select("id").eq("username", username).maybeSingle();
+    if (dup) return jsonError(400, { error: "Tên đăng nhập đã tồn tại" });
 
-    // 2) Lấy org_id + role của actor từ org_members (vì bạn 1 công ty)
-    //    Nếu bạn đã seed admin đúng, query này sẽ ra 1 dòng.
-    const { data: actorMember, error: actorMemberErr } = await supabase
-      .from("org_members")
-      .select("org_id, role, is_active")
-      .eq("user_id", actorId)
-      .eq("is_active", true)
-      .limit(1)
-      .maybeSingle();
+    const email = usernameToEmail(username);
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { username, full_name: body.full_name ?? null },
+    });
+    if (createErr) return jsonError(400, { error: createErr.message });
+    const newUserId = created.user?.id;
+    if (!newUserId) return jsonError(400, { error: "Tạo user thất bại" });
 
-    if (actorMemberErr || !actorMember) {
-      return jsonError(403, { error: "Bạn chưa được cấp quyền vào công ty" });
-    }
+    // Profile row is auto-created by handle_new_user trigger; update it with username.
+    await admin.from("profiles").update({
+      username,
+      full_name: body.full_name ?? null,
+      role,
+    }).eq("id", newUserId);
 
-    if (!["admin", "manager"].includes(actorMember.role)) {
-      return jsonError(403, { error: "Forbidden" });
-    }
-
-    const orgId = actorMember.org_id as string;
-
-    // 3) Service role admin client (server-only) để invite user
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!url || !serviceKey) {
-      return jsonError(500, {
-        error: "Missing env",
-        missing: {
-          NEXT_PUBLIC_SUPABASE_URL: !url,
-          SUPABASE_SERVICE_ROLE_KEY: !serviceKey,
-        },
-      });
-    }
-
-    const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-
-    // 4) Invite user (Supabase sẽ gửi email invite)
-    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(safeEmail);
-
-    if (inviteErr) {
-      return jsonError(400, {
-        error: inviteErr.message,
-        code: (inviteErr as any).code,
-        status: (inviteErr as any).status,
-      });
-    }
-
-    const newUserId = invited.user?.id;
-    if (!newUserId) {
-      return jsonError(400, { error: "Invite failed (no user id returned)" });
-    }
-
-    // 5) Upsert org_members (gán role)
-    //    Điều kiện: DB phải có UNIQUE/PK cho (org_id, user_id) để onConflict hoạt động.
-    const { data: upserted, error: upsertErr } = await admin
+    const { error: memberErr } = await admin
       .from("org_members")
       .upsert(
         { org_id: orgId, user_id: newUserId, role, is_active: true },
-        { onConflict: "org_id,user_id" }
-      )
-      .select("org_id,user_id,role,is_active")
-      .single();
+        { onConflict: "org_id,user_id" },
+      );
+    if (memberErr) return jsonError(400, { error: memberErr.message });
 
-    if (upsertErr) {
-      return jsonError(400, {
-        error: upsertErr.message,
-        code: (upsertErr as any).code,
-        details: (upsertErr as any).details,
-        hint: (upsertErr as any).hint,
-      });
-    }
-
-    return NextResponse.json({
-      ok: true,
-      invited: { user_id: newUserId, email: safeEmail },
-      member: upserted,
-    });
-  } catch (e: any) {
-    return jsonError(500, { error: e?.message ?? "Unknown error" });
+    return NextResponse.json({ ok: true, mode: "create", user_id: newUserId, username });
   }
+
+  // Mode B — legacy email invite.
+  const email = (body.email ?? "").trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return jsonError(400, { error: "Cần username hoặc email hợp lệ" });
+
+  const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email);
+  if (inviteErr) return jsonError(400, { error: inviteErr.message });
+  const newUserId = invited.user?.id;
+  if (!newUserId) return jsonError(400, { error: "Invite failed" });
+
+  const { error: memberErr } = await admin
+    .from("org_members")
+    .upsert(
+      { org_id: orgId, user_id: newUserId, role, is_active: true },
+      { onConflict: "org_id,user_id" },
+    );
+  if (memberErr) return jsonError(400, { error: memberErr.message });
+
+  await admin.from("profiles").update({ role }).eq("id", newUserId);
+
+  return NextResponse.json({ ok: true, mode: "invite", user_id: newUserId, email });
 }

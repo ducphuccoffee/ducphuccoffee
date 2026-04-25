@@ -1,7 +1,6 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { AuthCard } from "@/components/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -9,32 +8,42 @@ import { Button } from "@/components/ui/Button";
 export default function LoginClient() {
   const sp = useSearchParams();
   const next = sp.get("next") || "/dashboard";
+  const err = sp.get("err");
 
   return (
-    <AuthCard
-      title="Đăng nhập"
-      footer={
-        <div className="flex items-center justify-between">
-          <span>Chưa có tài khoản?</span>
-          <Link className="underline" href={`/signup?next=${encodeURIComponent(next)}`}>
-            Đăng ký
-          </Link>
-        </div>
-      }
-    >
+    <AuthCard title="Đăng nhập" footer={null}>
       <form className="space-y-3" action="/api/auth/login" method="post">
         <input type="hidden" name="next" value={next} />
         <div>
-          <label className="text-xs font-medium text-zinc-600">Email</label>
-          <Input name="email" type="email" required placeholder="you@email.com" />
+          <label className="text-xs font-medium text-zinc-600">
+            Tên đăng nhập / Số điện thoại
+          </label>
+          <Input
+            name="username"
+            type="text"
+            required
+            placeholder="vd: 0967027267"
+            autoComplete="username"
+            inputMode="text"
+          />
         </div>
         <div>
           <label className="text-xs font-medium text-zinc-600">Mật khẩu</label>
-          <Input name="password" type="password" required placeholder="••••••••" />
+          <Input
+            name="password"
+            type="password"
+            required
+            placeholder="••••••••"
+            autoComplete="current-password"
+          />
         </div>
-        <Button type="submit" className="w-full">
-          Đăng nhập
-        </Button>
+        {err && (
+          <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{err}</p>
+        )}
+        <Button type="submit" className="w-full">Đăng nhập</Button>
+        <p className="text-[11px] text-zinc-400 text-center">
+          Quên mật khẩu? Liên hệ quản lý để được cấp lại.
+        </p>
       </form>
     </AuthCard>
   );

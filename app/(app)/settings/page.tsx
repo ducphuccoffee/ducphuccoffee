@@ -12,6 +12,7 @@ const ROLE_LABEL: Record<string, string> = {
   warehouse: "Kho",
   sales: "Sales",
   collaborator: "CTV",
+  delivery: "Giao hàng",
 };
 
 export default async function Page() {
