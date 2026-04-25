@@ -115,14 +115,29 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-4 pb-6">
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-[18px] font-bold text-gray-800">Xin chào, {displayName} 👋</h1>
-        <p className="text-[12px] text-gray-400">{todayStr}</p>
+      {/* Header — hero card on mobile */}
+      <div className="md:bg-transparent bg-gradient-to-br from-blue-600 to-indigo-700 md:p-0 -mx-4 px-4 pt-2 pb-5 md:m-0 md:pb-0 text-white md:text-gray-800">
+        <p className="text-[11px] md:hidden opacity-80">{todayStr}</p>
+        <h1 className="text-[20px] md:text-[18px] font-bold mt-0.5 md:mt-0 md:text-gray-800">
+          Xin chào, {displayName} <span className="md:hidden">👋</span>
+        </h1>
+        <p className="hidden md:block text-[12px] text-gray-400">{todayStr}</p>
+        {/* Mobile inline KPI strip */}
+        <div className="md:hidden flex items-center gap-3 mt-3 text-[12px]">
+          <div>
+            <p className="opacity-75 text-[10px]">Hôm nay</p>
+            <p className="font-bold text-[15px]">{money(revenueToday)}</p>
+          </div>
+          <div className="w-px h-7 bg-white/30" />
+          <div>
+            <p className="opacity-75 text-[10px]">Tháng này</p>
+            <p className="font-bold text-[15px]">{money(revenueMonth)}</p>
+          </div>
+        </div>
       </div>
 
-      {/* KPI row — 4 cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      {/* KPI row — 4 cards (hidden on mobile, shown sm+) */}
+      <div className="hidden sm:grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard title="Doanh thu hôm nay"  value={money(revenueToday)}  subtitle={`${to.length} đơn hôm nay`}      icon={Banknote}    color="green" />
         <StatCard title="Doanh thu tháng"    value={money(revenueMonth)}  subtitle={`${mo.length} đơn tháng này`}     icon={TrendingUp}  color="blue" />
         <StatCard title="Khách hàng"         value={totalCustomers ?? 0}  subtitle="Tổng trong hệ thống"              icon={Users}       color="purple" />
@@ -130,6 +145,32 @@ export default async function DashboardPage() {
           value={`${pipeNew + pipeProg + pipeShip}`}
           subtitle={`${pipeDone} đã giao · ${pipeShip} đang giao`}
           icon={ShoppingCart} color="amber" />
+      </div>
+
+      {/* Mobile-only: secondary KPIs as compact pills */}
+      <div className="sm:hidden grid grid-cols-2 gap-2">
+        <div className="bg-white rounded-2xl border border-gray-200 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center">
+              <Users className="h-4 w-4 text-purple-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Khách hàng</p>
+              <p className="text-[15px] font-bold text-gray-800 leading-tight">{totalCustomers ?? 0}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+              <ShoppingCart className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Pipeline</p>
+              <p className="text-[15px] font-bold text-gray-800 leading-tight">{pipeNew + pipeProg + pipeShip}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Main 2-col: orders + CRM snapshot (admin) or stock alert (staff) */}

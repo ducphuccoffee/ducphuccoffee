@@ -24,7 +24,10 @@ import {
   DollarSign,
   Sun,
   GitBranch,
+  Bell,
 } from "lucide-react";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { MobileQuickCreate } from "@/components/MobileQuickCreate";
 
 const NAV_GROUPS = [
   {
@@ -164,9 +167,21 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [quickCreate, setQuickCreate] = useState(false);
 
   useEffect(() => {
     setOpen(false);
+    setQuickCreate(false);
+  }, [pathname]);
+
+  // Page title for mobile topbar — derived from current section
+  const pageTitle = useMemo(() => {
+    for (const grp of NAV_GROUPS) {
+      for (const it of grp.items) {
+        if (pathname === it.href || (it.href !== "/" && pathname.startsWith(it.href))) return it.label;
+      }
+    }
+    return "Đức Phúc";
   }, [pathname]);
 
   return (
@@ -180,33 +195,54 @@ export function AppShell({
       </aside>
 
       {/* ── Main content area ──────────── */}
-      <div className="md:ml-[220px] min-h-screen bg-[#f0f2f5]">
+      <div className="md:ml-[220px] min-h-screen bg-[#f5f6fa]">
         {/* Sticky topbar (desktop only) */}
         <div className="hidden md:block">{topbar}</div>
 
-        {/* Mobile topbar */}
+        {/* Mobile topbar — refined */}
         <div
-          className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-gray-200 px-4"
-          style={{ height: 52 }}
+          className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-white/95 backdrop-blur border-b border-gray-100 px-4"
+          style={{
+            height: 56,
+            paddingTop: "env(safe-area-inset-top)",
+            paddingLeft: "max(env(safe-area-inset-left), 16px)",
+            paddingRight: "max(env(safe-area-inset-right), 16px)",
+          }}
         >
-          <button
-            type="button"
-            className="p-2 rounded-md text-gray-500 hover:bg-gray-100"
-            onClick={() => setOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <p className="text-[14px] font-bold text-gray-800">Đức Phúc Coffee</p>
-          <div className="w-9" />
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-sm shadow-blue-500/30">
+              <Coffee className="h-4 w-4 text-white" />
+            </div>
+            <p className="text-[15px] font-bold text-gray-900 truncate">{pageTitle}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 active:bg-gray-100"
+              aria-label="Thông báo"
+            >
+              <Bell className="h-5 w-5" />
+            </button>
+            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 text-[12px] font-bold flex items-center justify-center">
+              {initials}
+            </div>
+          </div>
         </div>
 
-        {/* Page content */}
-        <div className="p-4 md:p-6">
+        {/* Page content — extra bottom pad on mobile for the bottom-nav */}
+        <div className="p-4 md:p-6 pb-[88px] md:pb-6">
           {children}
         </div>
       </div>
 
-      {/* ── Mobile drawer ──────────────── */}
+      {/* ── Mobile bottom nav + quick-create sheet ─── */}
+      <MobileBottomNav
+        onOpenMenu={() => setOpen(true)}
+        onOpenQuickCreate={() => setQuickCreate(true)}
+      />
+      <MobileQuickCreate open={quickCreate} onClose={() => setQuickCreate(false)} />
+
+      {/* ── Mobile drawer (full nav) ──────────────── */}
       {open && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
@@ -215,7 +251,7 @@ export function AppShell({
           />
           <div
             className="absolute left-0 top-0 h-full flex flex-col"
-            style={{ width: 240, background: "#101828" }}
+            style={{ width: 260, background: "#101828" }}
           >
             <div
               className="flex items-center justify-end px-3 py-3 shrink-0"
