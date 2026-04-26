@@ -12,7 +12,7 @@ CREATE OR REPLACE FUNCTION public.current_user_org_id()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT org_id FROM public.org_members
   WHERE user_id = auth.uid() AND is_active = true
-  ORDER BY joined_at NULLS LAST
+  ORDER BY created_at NULLS LAST
   LIMIT 1;
 $$;
 
