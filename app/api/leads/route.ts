@@ -13,20 +13,22 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const owner = searchParams.get("owner_user_id");
+  const limit  = Math.min(Math.max(parseInt(searchParams.get("limit")  ?? "100", 10) || 100, 1), 200);
+  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0",   10) || 0, 0);
 
   let q = supabase
     .from("leads")
-    .select("*")
+    .select("id, org_id, name, phone, address, area, source, demand, temperature, status, owner_user_id, created_by, converted_customer_id, created_at, updated_at")
     .eq("org_id", member.org_id)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
 
   if (status) q = q.eq("status", status);
   if (owner) q = q.eq("owner_user_id", owner);
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true, data });
+  return NextResponse.json({ ok: true, data, limit, offset });
 }
 
 export async function POST(request: Request) {

@@ -14,13 +14,15 @@ export async function GET(request: Request) {
   const leadId = searchParams.get("lead_id");
   const customerId = searchParams.get("customer_id");
   const oppId = searchParams.get("opportunity_id");
+  const limit  = Math.min(Math.max(parseInt(searchParams.get("limit")  ?? "100", 10) || 100, 1), 200);
+  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0",   10) || 0, 0);
 
   let q = supabase
     .from("crm_activities")
-    .select("*")
+    .select("id, org_id, lead_id, customer_id, opportunity_id, type, content, owner_user_id, created_by, created_at")
     .eq("org_id", member.org_id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(offset, offset + limit - 1);
 
   if (leadId) q = q.eq("lead_id", leadId);
   if (customerId) q = q.eq("customer_id", customerId);
@@ -28,7 +30,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true, data });
+  return NextResponse.json({ ok: true, data, limit, offset });
 }
 
 const VALID_TYPES = ["call", "message", "meeting", "visit", "quotation", "note"];

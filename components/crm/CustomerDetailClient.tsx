@@ -38,23 +38,38 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
     return d.toISOString().slice(0, 16);
   });
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Helper: never let a single failing endpoint blow up the whole Promise.all.
+  function safeFetch(url: string) {
+    return fetch(url)
+      .then(r => r.ok ? r.json() : Promise.resolve({ data: null, _failed: true, _status: r.status }))
+      .catch(err => {
+        console.error("[CustomerDetail] fetch failed:", url, err);
+        return { data: null, _failed: true };
+      });
+  }
 
   function load() {
     setLoading(true);
+    setLoadError(null);
     Promise.all([
-      fetch(`/api/customers?id=${customerId}`).then(r => r.json()),
-      fetch(`/api/crm-activities?customer_id=${customerId}`).then(r => r.json()),
-      fetch(`/api/sfa-visits?customer_id=${customerId}`).then(r => r.json()),
-      fetch(`/api/opportunities?customer_id=${customerId}`).then(r => r.json()),
-      fetch(`/api/orders?customer_id=${customerId}`).then(r => r.json()),
-      fetch(`/api/customer-debt`).then(r => r.json()),
+      safeFetch(`/api/customers?id=${customerId}`),
+      safeFetch(`/api/crm-activities?customer_id=${customerId}`),
+      safeFetch(`/api/sfa-visits?customer_id=${customerId}`),
+      safeFetch(`/api/opportunities?customer_id=${customerId}`),
+      safeFetch(`/api/orders?customer_id=${customerId}`),
+      safeFetch(`/api/customer-debt`),
     ]).then(([cust, act, vis, opp, ord, dbt]) => {
-      if (cust.data) {
+      const failedAny = [cust, act, vis, opp, ord, dbt].some((x: any) => x?._failed);
+      if (failedAny) setLoadError("Một số dữ liệu không tải được. Hiển thị phần khả dụng.");
+
+      if (cust?.data) {
         const c = Array.isArray(cust.data) ? cust.data.find((x: any) => x.id === customerId) : cust.data;
         setCustomer(c ?? null);
       }
-      setActivities(act.data ?? []);
-      const allVisits = (vis.data ?? []) as any[];
+      setActivities(act?.data ?? []);
+      const allVisits = (vis?.data ?? []) as any[];
       setVisits(allVisits.map((v: any) => ({ ...v })));
       // Planned visits (no result, no checkout) become the "tasks" list for this customer.
       setTasks(
@@ -69,9 +84,9 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
             created_at: v.created_at ?? v.checkin_at,
           }))
       );
-      setOpps(opp.data ?? []);
-      setOrders(ord.data ?? []);
-      const debtRow = (dbt.data ?? []).find((d: any) => d.customer_id === customerId);
+      setOpps(opp?.data ?? []);
+      setOrders(ord?.data ?? []);
+      const debtRow = (dbt?.data ?? []).find((d: any) => d.customer_id === customerId);
       setDebt(debtRow ?? null);
     }).finally(() => setLoading(false));
   }
@@ -121,6 +136,13 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
   return (
     <div className="p-4 space-y-4">
       <Link href="/customers" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mb-2"><ArrowLeft className="h-3 w-3" /> Danh sách KH</Link>
+
+      {loadError && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 flex items-center justify-between gap-2">
+          <span>{loadError}</span>
+          <button onClick={load} className="underline font-semibold whitespace-nowrap">Thử lại</button>
+        </div>
+      )}
 
       {/* Overview */}
       <div className="rounded-xl border bg-white p-4">

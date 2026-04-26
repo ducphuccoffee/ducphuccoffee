@@ -83,29 +83,30 @@ async function handleRevenue(supabase: any, orgId: string, isAdmin: boolean, use
     byCust[cid].count++;
   }
 
-  // By product (order_items)
+  // Parallelize order_items + profiles enrichment (independent)
   const orderIds = list.map((o: any) => o.id);
+  const saleIds = Object.keys(bySale);
+  const [itemsRes, profilesRes] = await Promise.all([
+    orderIds.length > 0
+      ? supabase.from("order_items")
+          .select("product_id, qty_kg, subtotal, products(name)")
+          .in("order_id", orderIds.slice(0, 200))
+      : Promise.resolve({ data: [] as any[] }),
+    saleIds.length > 0
+      ? supabase.from("profiles").select("id, full_name").in("id", saleIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
   let byProduct: Record<string, { name: string; revenue: number; qty_kg: number }> = {};
-  if (orderIds.length > 0) {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("product_id, qty_kg, subtotal, products(name)")
-      .in("order_id", orderIds.slice(0, 200));
-    for (const it of items ?? []) {
-      const pid = it.product_id ?? "unknown";
-      if (!byProduct[pid]) byProduct[pid] = { name: it.products?.name ?? pid, revenue: 0, qty_kg: 0 };
-      byProduct[pid].revenue += Number(it.subtotal ?? 0);
-      byProduct[pid].qty_kg += Number(it.qty_kg ?? 0);
-    }
+  for (const it of itemsRes.data ?? []) {
+    const pid = it.product_id ?? "unknown";
+    if (!byProduct[pid]) byProduct[pid] = { name: it.products?.name ?? pid, revenue: 0, qty_kg: 0 };
+    byProduct[pid].revenue += Number(it.subtotal ?? 0);
+    byProduct[pid].qty_kg += Number(it.qty_kg ?? 0);
   }
 
-  // Enrich sale names
-  const saleIds = Object.keys(bySale);
   let saleNames: Record<string, string> = {};
-  if (saleIds.length > 0) {
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", saleIds);
-    for (const p of profiles ?? []) saleNames[p.id] = p.full_name || p.id;
-  }
+  for (const p of profilesRes.data ?? []) saleNames[p.id] = p.full_name || p.id;
 
   return NextResponse.json({
     ok: true,
@@ -165,29 +166,20 @@ async function handleDebt(supabase: any, orgId: string) {
 }
 
 async function handleSales(supabase: any, orgId: string, from: string | null, to: string | null) {
-  // Orders
+  // Build all 4 independent queries then run in parallel
   let oq = supabase.from("orders").select("owner_user_id, total_amount").eq("org_id", orgId).in("status", ["accepted", "delivered", "completed"]);
-  if (from) oq = oq.gte("created_at", from);
-  if (to) oq = oq.lte("created_at", to);
-  const { data: orders } = await oq;
-
-  // Commissions
   let cq = supabase.from("commissions").select("beneficiary_user_id, amount, status").eq("org_id", orgId);
-  if (from) cq = cq.gte("created_at", from);
-  if (to) cq = cq.lte("created_at", to);
-  const { data: comms } = await cq;
-
-  // Leads
   let lq = supabase.from("leads").select("owner_user_id, status").eq("org_id", orgId);
-  if (from) lq = lq.gte("created_at", from);
-  if (to) lq = lq.lte("created_at", to);
-  const { data: leads } = await lq;
-
-  // Opportunities
   let opq = supabase.from("opportunities").select("owner_user_id, stage, expected_value").eq("org_id", orgId);
-  if (from) opq = opq.gte("created_at", from);
-  if (to) opq = opq.lte("created_at", to);
-  const { data: opps } = await opq;
+
+  if (from) { oq = oq.gte("created_at", from); cq = cq.gte("created_at", from); lq = lq.gte("created_at", from); opq = opq.gte("created_at", from); }
+  if (to)   { oq = oq.lte("created_at", to);   cq = cq.lte("created_at", to);   lq = lq.lte("created_at", to);   opq = opq.lte("created_at", to); }
+
+  const [ordersRes, commsRes, leadsRes, oppsRes] = await Promise.all([oq, cq, lq, opq]);
+  const orders = ordersRes.data;
+  const comms  = commsRes.data;
+  const leads  = leadsRes.data;
+  const opps   = oppsRes.data;
 
   // Aggregate per user
   const users: Record<string, { revenue: number; orders: number; comm_total: number; comm_pending: number; comm_paid: number; leads: number; converted: number; opps: number; opp_value: number }> = {};
@@ -214,17 +206,17 @@ async function handleSales(supabase: any, orgId: string, from: string | null, to
 }
 
 async function handleStock(supabase: any, orgId: string) {
-  // Green stock
-  const { data: green } = await supabase.from("v_green_stock").select("*").eq("org_id", orgId).order("remaining_kg", { ascending: false });
-
-  // Product (roasted) stock from v_onhand_by_lot_ui
-  const { data: roasted } = await supabase.from("v_onhand_by_lot_ui").select("*").eq("org_id", orgId).order("qty_onhand_kg", { ascending: false });
-
-  // Recent ledger
-  const { data: ledger } = await supabase.from("inventory_ledger").select("*").eq("org_id", orgId).order("occurred_at", { ascending: false }).limit(30);
-
-  // Products for reference
-  const { data: products } = await supabase.from("products").select("id, name").eq("org_id", orgId);
+  // 4 independent reads → parallel
+  const [greenRes, roastedRes, ledgerRes, productsRes] = await Promise.all([
+    supabase.from("v_green_stock").select("*").eq("org_id", orgId).order("remaining_kg", { ascending: false }),
+    supabase.from("v_onhand_by_lot_ui").select("*").eq("org_id", orgId).order("qty_onhand_kg", { ascending: false }),
+    supabase.from("inventory_ledger").select("*").eq("org_id", orgId).order("occurred_at", { ascending: false }).limit(30),
+    supabase.from("products").select("id, name").eq("org_id", orgId),
+  ]);
+  const green    = greenRes.data;
+  const roasted  = roastedRes.data;
+  const ledger   = ledgerRes.data;
+  const products = productsRes.data;
   const prodMap: Record<string, string> = {};
   for (const p of products ?? []) prodMap[p.id] = p.name;
 
@@ -266,11 +258,34 @@ async function handleStock(supabase: any, orgId: string) {
 async function handleCrm(supabase: any, orgId: string, isAdmin: boolean, userId: string, from: string | null, to: string | null) {
   const ownerFilter = (q: any) => isAdmin ? q : q.eq("owner_user_id", userId);
 
-  // Leads
+  // Build all 5 independent queries
   let lq = ownerFilter(supabase.from("leads").select("id, status, temperature, created_at").eq("org_id", orgId));
-  if (from) lq = lq.gte("created_at", from);
-  if (to) lq = lq.lte("created_at", to);
-  const { data: leads } = await lq;
+  let oq = ownerFilter(supabase.from("opportunities").select("id, stage, expected_value").eq("org_id", orgId));
+  let vq = ownerFilter(supabase.from("sfa_visits").select("id", { count: "exact" }).eq("org_id", orgId));
+  let aq = ownerFilter(supabase.from("crm_activities").select("id, type, content, created_at").eq("org_id", orgId));
+
+  if (from) { lq = lq.gte("created_at", from); oq = oq.gte("created_at", from); vq = vq.gte("checkin_at", from); aq = aq.gte("created_at", from); }
+  if (to)   { lq = lq.lte("created_at", to);   oq = oq.lte("created_at", to);   vq = vq.lte("checkin_at", to);   aq = aq.lte("created_at", to); }
+
+  const now = new Date();
+  const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+  const [leadsRes, oppsRes, visitsRes, activitiesRes, overdueRes] = await Promise.all([
+    lq,
+    oq,
+    vq,
+    aq.order("created_at", { ascending: false }).limit(20),
+    supabase.from("tasks").select("id", { count: "exact" })
+      .eq("org_id", orgId).eq("owner_user_id", userId)
+      .in("type", ["crm_followup", "visit", "quotation_followup", "debt_followup"])
+      .in("status", ["todo", "in_progress"])
+      .lt("due_at", todayISO),
+  ]);
+  const leads = leadsRes.data;
+  const opps = oppsRes.data;
+  const visitCount = visitsRes.count;
+  const activities = activitiesRes.data;
+  const overdueCount = overdueRes.count;
 
   const leadsByStatus: Record<string, number> = {};
   const leadsByTemp: Record<string, number> = {};
@@ -279,40 +294,12 @@ async function handleCrm(supabase: any, orgId: string, isAdmin: boolean, userId:
     leadsByTemp[l.temperature] = (leadsByTemp[l.temperature] ?? 0) + 1;
   }
 
-  // Opportunities
-  let oq = ownerFilter(supabase.from("opportunities").select("id, stage, expected_value").eq("org_id", orgId));
-  if (from) oq = oq.gte("created_at", from);
-  if (to) oq = oq.lte("created_at", to);
-  const { data: opps } = await oq;
-
   const oppsByStage: Record<string, { count: number; value: number }> = {};
   for (const o of opps ?? []) {
     if (!oppsByStage[o.stage]) oppsByStage[o.stage] = { count: 0, value: 0 };
     oppsByStage[o.stage].count++;
     oppsByStage[o.stage].value += Number(o.expected_value ?? 0);
   }
-
-  // Overdue follow-ups
-  const now = new Date();
-  const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const { data: overdueTasks, count: overdueCount } = await supabase
-    .from("tasks").select("id", { count: "exact" })
-    .eq("org_id", orgId).eq("owner_user_id", userId)
-    .in("type", ["crm_followup", "visit", "quotation_followup", "debt_followup"])
-    .in("status", ["todo", "in_progress"])
-    .lt("due_at", todayISO);
-
-  // Visits
-  let vq = ownerFilter(supabase.from("sfa_visits").select("id", { count: "exact" }).eq("org_id", orgId));
-  if (from) vq = vq.gte("checkin_at", from);
-  if (to) vq = vq.lte("checkin_at", to);
-  const { count: visitCount } = await vq;
-
-  // Activities
-  let aq = ownerFilter(supabase.from("crm_activities").select("id, type, content, created_at").eq("org_id", orgId));
-  if (from) aq = aq.gte("created_at", from);
-  if (to) aq = aq.lte("created_at", to);
-  const { data: activities } = await aq.order("created_at", { ascending: false }).limit(20);
 
   return NextResponse.json({
     ok: true,

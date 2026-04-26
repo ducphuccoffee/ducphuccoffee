@@ -34,14 +34,18 @@ export async function GET(request: Request) {
   const supabase = createRouteSupabase(request, NextResponse.json({}));
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get("customer_id");
+  const status     = searchParams.get("status");
+  const limit  = Math.min(Math.max(parseInt(searchParams.get("limit")  ?? "100", 10) || 100, 1), 200);
+  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0",   10) || 0, 0);
 
   let q = supabase
     .from("orders")
     .select(SELECT_ORDERS)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
 
   if (customerId) q = q.eq("customer_id", customerId);
+  if (status)     q = q.eq("status", status);
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -54,7 +58,7 @@ export async function GET(request: Request) {
     payment_method: "cash",
   }));
 
-  return NextResponse.json({ data: normalized });
+  return NextResponse.json({ data: normalized, limit, offset });
 }
 
 export async function POST(request: Request) {
