@@ -3,7 +3,7 @@ import { formatWeekdayDateVN } from "@/lib/date";
 import TaskBoard from "@/components/dashboard/TaskBoard";
 import { StockAlertsCard } from "@/components/dashboard/StockAlertsCard";
 import { CrmSnapshotCard } from "@/components/dashboard/CrmSnapshotCard";
-import { Banknote, TrendingUp, Users, ShoppingCart, Package, Factory, TrendingDown, AlertCircle } from "lucide-react";
+import { Banknote, TrendingUp, Users, ShoppingCart, Package, Factory, TrendingDown, AlertCircle, Coins, Wallet, Scale, Receipt } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────
 const VN_FMT = new Intl.NumberFormat("vi-VN");
@@ -71,8 +71,8 @@ export default async function DashboardPage() {
     supabase.from("orders")
       .select("id, status, total_amount, created_at, customers(name)")
       .order("created_at", { ascending: false }).limit(5),
-    supabase.from("orders").select("id, status, total_amount").gte("created_at", monthStart),
-    supabase.from("orders").select("id, status, total_amount").gte("created_at", todayStart),
+    supabase.from("orders").select("id, status, total_amount, total_qty_kg").gte("created_at", monthStart),
+    supabase.from("orders").select("id, status, total_amount, total_qty_kg").gte("created_at", todayStart),
     supabase.from("customers").select("*", { count: "exact", head: true }),
   ]);
 
@@ -98,11 +98,48 @@ export default async function DashboardPage() {
   const revenueToday = to.filter((o: any) => revStatuses.includes(o.status))
     .reduce((s: number, o: any) => s + (Number(o.total_amount) || 0), 0);
 
+  // Kg sold (month / today) — count any non-cancelled order
+  const kgMonth = mo.filter((o: any) => o.status !== "cancelled")
+    .reduce((s: number, o: any) => s + (Number(o.total_qty_kg) || 0), 0);
+  const kgToday = to.filter((o: any) => o.status !== "cancelled")
+    .reduce((s: number, o: any) => s + (Number(o.total_qty_kg) || 0), 0);
+
   // Pipeline counts (month)
   const pipeNew  = mo.filter((o: any) => o.status === "new").length;
   const pipeProg = mo.filter((o: any) => ["accepted","preparing","ready_to_ship"].includes(o.status)).length;
   const pipeShip = mo.filter((o: any) => o.status === "shipping").length;
   const pipeDone = mo.filter((o: any) => revStatuses.includes(o.status)).length;
+
+  // ── Admin-only: COGS, expenses, commissions, profit (month) ────────────
+  let cogsMonth = 0;
+  let expensesMonth = 0;
+  let commissionsMonth = 0;
+  if (isManager) {
+    const monthIds = mo.filter((o: any) => o.status !== "cancelled").map((o: any) => o.id);
+    const [
+      { data: movements },
+      { data: expRows },
+      { data: commRows },
+    ] = await Promise.all([
+      monthIds.length > 0
+        ? supabase
+            .from("stock_movements")
+            .select("qty_kg, roasted_lot_id, roasted_stock_lots(cost_per_kg)")
+            .eq("movement_type", "sale_out")
+            .in("order_id", monthIds)
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.from("expenses").select("amount").gte("expense_date", monthStart.slice(0, 10)),
+      supabase.from("commissions").select("amount").gte("created_at", monthStart),
+    ]);
+    cogsMonth = (movements ?? []).reduce(
+      (s: number, m: any) => s + Number(m.qty_kg ?? 0) * Number(m.roasted_stock_lots?.cost_per_kg ?? 0),
+      0
+    );
+    expensesMonth = (expRows ?? []).reduce((s: number, e: any) => s + Number(e.amount ?? 0), 0);
+    commissionsMonth = (commRows ?? []).reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
+  }
+  const profitMonth = revenueMonth - cogsMonth - commissionsMonth - expensesMonth;
+  const profitMargin = revenueMonth > 0 ? (profitMonth / revenueMonth) * 100 : 0;
 
   const recentOrders = (recentOrdersRaw ?? []).map((o: any) => ({
     ...o,
@@ -133,6 +170,11 @@ export default async function DashboardPage() {
             <p className="opacity-75 text-[10px]">Tháng này</p>
             <p className="font-bold text-[15px]">{money(revenueMonth)}</p>
           </div>
+          <div className="w-px h-7 bg-white/30" />
+          <div>
+            <p className="opacity-75 text-[10px]">Kg bán</p>
+            <p className="font-bold text-[15px]">{kgMonth.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}</p>
+          </div>
         </div>
       </div>
 
@@ -146,6 +188,71 @@ export default async function DashboardPage() {
           subtitle={`${pipeDone} đã giao · ${pipeShip} đang giao`}
           icon={ShoppingCart} color="amber" />
       </div>
+
+      {/* ── Admin-only: P&L block ──────────────────────────────── */}
+      {isManager && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-[14px] font-bold text-gray-800">Kinh doanh tháng này</h2>
+              <p className="text-[11px] text-gray-400">Từ {monthStart.slice(8,10)}/{monthStart.slice(5,7)} đến nay</p>
+            </div>
+            <a href="/reports" className="text-[12px] text-blue-500 hover:underline font-medium shrink-0">Báo cáo →</a>
+          </div>
+
+          {/* Top row: kg sold + profit highlight */}
+          <div className="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-1.5 text-[10.5px] text-gray-400 uppercase tracking-wide">
+                <Scale className="h-3 w-3" />Cà phê đã bán
+              </div>
+              <p className="text-[20px] font-bold text-gray-800 mt-0.5 leading-none">
+                {kgMonth.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} <span className="text-[12px] font-normal text-gray-400">kg</span>
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Hôm nay: {kgToday.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} kg</p>
+            </div>
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-1.5 text-[10.5px] text-gray-400 uppercase tracking-wide">
+                {profitMonth >= 0 ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-red-500" />}
+                Lợi nhuận tạm tính
+              </div>
+              <p className={`text-[20px] font-bold mt-0.5 leading-none ${profitMonth >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {money(profitMonth)}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Biên: <span className={profitMargin >= 0 ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>{profitMargin.toFixed(1)}%</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Cost breakdown */}
+          <div className="grid grid-cols-3 divide-x divide-gray-100 text-center">
+            <div className="px-3 py-2.5">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-400 uppercase tracking-wide">
+                <Coins className="h-3 w-3" />Giá vốn
+              </div>
+              <p className="text-[13px] font-semibold text-gray-800 mt-0.5">{money(cogsMonth)}</p>
+            </div>
+            <div className="px-3 py-2.5">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-400 uppercase tracking-wide">
+                <Wallet className="h-3 w-3" />Hoa hồng
+              </div>
+              <p className="text-[13px] font-semibold text-gray-800 mt-0.5">{money(commissionsMonth)}</p>
+            </div>
+            <div className="px-3 py-2.5">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-400 uppercase tracking-wide">
+                <Receipt className="h-3 w-3" />Vận hành
+              </div>
+              <p className="text-[13px] font-semibold text-gray-800 mt-0.5">{money(expensesMonth)}</p>
+            </div>
+          </div>
+
+          {/* Equation hint */}
+          <div className="px-4 py-2 bg-gray-50 text-[10.5px] text-gray-500 text-center border-t border-gray-100">
+            {money(revenueMonth)} doanh thu − {money(cogsMonth + commissionsMonth + expensesMonth)} chi phí
+          </div>
+        </div>
+      )}
 
       {/* Mobile-only: secondary KPIs as compact pills */}
       <div className="sm:hidden grid grid-cols-2 gap-2">
