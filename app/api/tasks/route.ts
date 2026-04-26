@@ -87,13 +87,13 @@ export async function GET(request: Request) {
   if (orderIds.length > 0) {
     const { data: orders } = await svc()
       .from("orders")
-      .select("id, status, total_amount, customer_id, customers(id, name)")
+      .select("id, order_code, status, total_amount, customer_id, customers(id, name, phone)")
       .in("id", orderIds);
     if (orders) {
       for (const o of orders) {
         ordersMap[o.id] = {
           id: o.id,
-          order_code: "#" + o.id.slice(0, 8).toUpperCase(),
+          order_code: o.order_code ?? ("#" + o.id.slice(0, 8).toUpperCase()),
           status: o.status,
           total_amount: o.total_amount,
           customers: o.customers,
@@ -102,11 +102,25 @@ export async function GET(request: Request) {
     }
   }
 
+  // Resolve assigned_to → display name
+  const assigneeIds = [...new Set(tasksArr.map((t: any) => t.assigned_to).filter(Boolean))];
+  const assigneeMap: Record<string, string> = {};
+  if (assigneeIds.length > 0) {
+    const { data: profiles } = await svc()
+      .from("profiles")
+      .select("id, full_name, username")
+      .in("id", assigneeIds);
+    for (const p of profiles ?? []) {
+      assigneeMap[p.id] = p.full_name || p.username || p.id.slice(0, 8);
+    }
+  }
+
   const enriched = tasksArr.map((t: any) => ({
     ...t,
     orders: (t.ref_type === "order" && (t.order_id || t.ref_id))
       ? (ordersMap[t.order_id || t.ref_id] ?? null)
       : null,
+    assignee_name: t.assigned_to ? (assigneeMap[t.assigned_to] ?? null) : null,
   }));
 
   return NextResponse.json({ data: enriched });
