@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Search, Phone, MapPin, User } from "lucide-react";
 import { formatDateVN } from "@/lib/date";
+import { Sheet } from "@/components/ui/Sheet";
 
 type Lead = {
   id: string;
@@ -360,14 +361,20 @@ export function LeadsClient() {
       )}
 
       {/* Create modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto">
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-800">Tạo lead mới</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-            </div>
-            <form onSubmit={handleCreate} className="p-4 space-y-3">
+      <Sheet
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="Tạo lead mới"
+        footer={
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Huỷ</button>
+            <button type="submit" form="lead-form" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? "Đang lưu..." : "Tạo lead"}
+            </button>
+          </div>
+        }
+      >
+        <form id="lead-form" onSubmit={handleCreate} className="p-4 space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-600">Tên *</label>
                 <input value={name} onChange={e => setName(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Quán cà phê ABC" />
@@ -432,16 +439,8 @@ export function LeadsClient() {
                 <textarea value={demand} onChange={e => setDemand(e.target.value)} rows={2} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Cần 50kg/tháng, pha máy" />
               </div>
               {formError && <div className="text-xs text-red-600 bg-red-50 p-2 rounded">{formError}</div>}
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Huỷ</button>
-                <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? "Đang lưu..." : "Tạo lead"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Sheet>
     </div>
   );
 }

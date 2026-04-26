@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatDateVN, formatDateTimeVN, formatCurrencyVN } from "@/lib/date";
 import { Phone, MapPin, DollarSign, ShoppingCart, Target, MessageSquare, Footprints, CheckSquare, Plus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Sheet } from "@/components/ui/Sheet";
 
 type Activity = { id: string; type: string; content: string | null; created_at: string };
 type Visit = { id: string; checkin_at: string; result: string | null; note: string | null };
@@ -289,14 +290,8 @@ function Section({ title, icon, count, children }: { title: string; icon: React.
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-4 py-3 border-b flex items-center justify-between">
-          <h3 className="text-base font-bold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-        </div>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
+    <Sheet open onClose={onClose} title={<h3 className="text-base font-bold text-gray-800">{title}</h3>}>
+      <div className="p-4">{children}</div>
+    </Sheet>
   );
 }

@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { CheckCircle, AlertTriangle, Clock, Plus, ChevronRight } from "lucide-react";
 import { formatDateVN, formatDateTimeVN } from "@/lib/date";
 import Link from "next/link";
+import { Sheet } from "@/components/ui/Sheet";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type PlannedVisit = {
   id: string;
@@ -33,6 +35,8 @@ export function FollowupsClient() {
     return d.toISOString().slice(0, 16);
   });
   const [note, setNote] = useState("");
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   function load() {
     setLoading(true);
@@ -80,14 +84,19 @@ export function FollowupsClient() {
     load();
   }
 
-  async function cancel(id: string) {
-    if (!confirm("Huỷ kế hoạch ghé thăm này?")) return;
-    await fetch(`/api/sfa-visits?id=${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ result: "lost", note: "(huỷ kế hoạch)" }),
-    });
-    load();
+  async function doCancel(id: string) {
+    setCancelling(true);
+    try {
+      await fetch(`/api/sfa-visits?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "lost", note: "(huỷ kế hoạch)" }),
+      });
+      load();
+    } finally {
+      setCancelling(false);
+      setCancelId(null);
+    }
   }
 
   async function resolveFollowup(id: string) {
@@ -145,7 +154,7 @@ export function FollowupsClient() {
         <div className="flex gap-1 shrink-0">
           <Link href={checkinHref} className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">Check-in</Link>
           <button onClick={() => postpone(v.id)} className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded hover:bg-amber-200">+1d</button>
-          <button onClick={() => cancel(v.id)} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-200">Huỷ</button>
+          <button onClick={() => setCancelId(v.id)} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-200">Huỷ</button>
         </div>
       </div>
     );
@@ -216,43 +225,55 @@ export function FollowupsClient() {
         </div>
       )}
 
-      {/* Create (plan visit) modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setShowCreate(false)}>
-          <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-800">Lên kế hoạch ghé thăm</h3>
-              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-            </div>
-            <form onSubmit={handleCreate} className="p-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600">Khách hàng *</label>
-                <select value={customerId} onChange={e => setCustomerId(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                  <option value="">-- Chọn KH --</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Giờ dự kiến</label>
-                <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Ghi chú</label>
-                <input value={note} onChange={e => setNote(e.target.value)}
-                  placeholder="Chào hàng sản phẩm mới…"
-                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
-              </div>
-              {error && <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</p>}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600">Huỷ</button>
-                <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "..." : "Lên kế hoạch"}</button>
-              </div>
-            </form>
+      {/* Create (plan visit) sheet */}
+      <Sheet
+        open={showCreate}
+        onClose={() => !saving && setShowCreate(false)}
+        title={<h3 className="text-base font-bold text-gray-800">Lên kế hoạch ghé thăm</h3>}
+        footer={
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2.5 border rounded-xl text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50" disabled={saving}>Huỷ</button>
+            <button type="submit" form="plan-visit-form" disabled={saving || !customerId} className="flex-1 px-3 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50">
+              {saving ? "Đang lưu…" : "Lên kế hoạch"}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="plan-visit-form" onSubmit={handleCreate} className="p-4 space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Khách hàng *</label>
+            <select value={customerId} onChange={e => setCustomerId(e.target.value)}
+              className="w-full mt-1 px-3 py-2.5 border rounded-lg text-sm bg-white">
+              <option value="">-- Chọn KH --</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Giờ dự kiến</label>
+            <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
+              className="w-full mt-1 px-3 py-2.5 border rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Ghi chú</label>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              placeholder="Chào hàng sản phẩm mới…"
+              className="w-full mt-1 px-3 py-2.5 border rounded-lg text-sm" />
+          </div>
+          {error && <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</p>}
+        </form>
+      </Sheet>
+
+      {/* Confirm cancel visit */}
+      <ConfirmDialog
+        open={!!cancelId}
+        onClose={() => setCancelId(null)}
+        onConfirm={() => { if (cancelId) return doCancel(cancelId); }}
+        title="Huỷ kế hoạch ghé thăm?"
+        description="Visit sẽ bị đánh dấu là 'lost' và biến mất khỏi danh sách kế hoạch."
+        confirmLabel="Huỷ kế hoạch"
+        loading={cancelling}
+        destructive
+      />
     </div>
   );
 }

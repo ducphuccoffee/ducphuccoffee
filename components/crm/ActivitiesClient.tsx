@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Search, Plus, MessageSquare, Phone, Video, MapPin, FileText, StickyNote } from "lucide-react";
 import { formatDateTimeVN } from "@/lib/date";
+import { Sheet } from "@/components/ui/Sheet";
 
 type Activity = {
   id: string;
@@ -118,49 +119,47 @@ export function ActivitiesClient() {
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setShowModal(false)}>
-          <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-800">Ghi nhận hoạt động</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-            </div>
-            <form onSubmit={handleCreate} className="p-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600">Loại</label>
-                <select value={type} onChange={e => setType(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                  {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Khách hàng</label>
-                <select value={customerId} onChange={e => { setCustomerId(e.target.value); if (e.target.value) setLeadId(""); }}
-                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                  <option value="">-- Chọn --</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Lead</label>
-                <select value={leadId} onChange={e => { setLeadId(e.target.value); if (e.target.value) setCustomerId(""); }}
-                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
-                  <option value="">-- Chọn --</option>
-                  {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Nội dung</label>
-                <textarea value={content} onChange={e => setContent(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm resize-none" placeholder="Ghi chú cuộc gọi..." />
-              </div>
-              {error && <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</p>}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600">Huỷ</button>
-                <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "..." : "Lưu"}</button>
-              </div>
-            </form>
+      <Sheet
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="Ghi nhận hoạt động"
+        footer={
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600">Huỷ</button>
+            <button type="submit" form="activity-form" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "..." : "Lưu"}</button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="activity-form" onSubmit={handleCreate} className="p-4 space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Loại</label>
+            <select value={type} onChange={e => setType(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
+              {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Khách hàng</label>
+            <select value={customerId} onChange={e => { setCustomerId(e.target.value); if (e.target.value) setLeadId(""); }}
+              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
+              <option value="">-- Chọn --</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Lead</label>
+            <select value={leadId} onChange={e => { setLeadId(e.target.value); if (e.target.value) setCustomerId(""); }}
+              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white">
+              <option value="">-- Chọn --</option>
+              {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Nội dung</label>
+            <textarea value={content} onChange={e => setContent(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm resize-none" placeholder="Ghi chú cuộc gọi..." />
+          </div>
+          {error && <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</p>}
+        </form>
+      </Sheet>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Search, ChevronDown, DollarSign, User, ArrowRight, ShoppingCart } from "lucide-react";
 import { formatDateVN } from "@/lib/date";
+import { Sheet } from "@/components/ui/Sheet";
 
 type Opportunity = {
   id: string;
@@ -246,14 +247,20 @@ export function OpportunitiesClient() {
       )}
 
       {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[90vh] overflow-y-auto">
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h3 className="text-base font-bold text-gray-800">Tạo cơ hội mới</h3>
-              <button onClick={() => { setShowCreate(false); resetForm(); }} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-            </div>
-            <form onSubmit={handleCreate} className="p-4 space-y-3">
+      <Sheet
+        open={showCreate}
+        onClose={() => { setShowCreate(false); resetForm(); }}
+        title="Tạo cơ hội mới"
+        footer={
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Huỷ</button>
+            <button type="submit" form="opp-form" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? "Đang lưu..." : "Tạo cơ hội"}
+            </button>
+          </div>
+        }
+      >
+        <form id="opp-form" onSubmit={handleCreate} className="p-4 space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-600">Tiêu đề *</label>
                 <input value={title} onChange={e => setTitle(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Cung cấp 50kg/tháng" />
@@ -290,16 +297,8 @@ export function OpportunitiesClient() {
                   className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               {formError && <div className="text-xs text-red-600 bg-red-50 p-2 rounded">{formError}</div>}
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="flex-1 px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Huỷ</button>
-                <button type="submit" disabled={saving} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? "Đang lưu..." : "Tạo cơ hội"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Sheet>
     </div>
   );
 }
