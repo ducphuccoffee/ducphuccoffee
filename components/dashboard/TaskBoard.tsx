@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Clock, User, CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { toast } from "@/components/ui/Toast";
 
 const COLUMNS: { type: string; label: string; color: string }[] = [
   { type: "confirm_order", label: "Chờ tiếp nhận",  color: "border-t-sky-400" },
@@ -88,7 +89,7 @@ export default function TaskBoard({ userId, userRole }: Props) {
       if (json.error) throw new Error(json.error);
       await load();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message);
     } finally {
       setActing(null);
     }

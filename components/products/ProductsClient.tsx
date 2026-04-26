@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/Toast";
 
 const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
@@ -157,11 +158,12 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
     try {
       const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
       const json = await res.json();
-      if (!res.ok || json.error) { alert(json.error ?? "Lỗi xoá"); return; }
+      if (!res.ok || json.error) { toast.error(json.error ?? "Lỗi xoá"); return; }
       setDeleteId(null);
+      toast.success("Đã xoá sản phẩm");
       router.refresh();
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     } finally {
       setSaving(false);
     }

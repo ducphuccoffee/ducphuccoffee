@@ -3,6 +3,8 @@ import { formatDateVN, formatDateTimeVN } from "@/lib/date";
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/Toast";
+import { Sheet } from "@/components/ui/Sheet";
 
 // ── Constants ─────────────────────────────────────────────────────
 const money = (n: number) =>
@@ -292,9 +294,10 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
       body: JSON.stringify({ status }),
     });
     const json = await res.json();
-    if (!res.ok || json.error) { alert(json.error ?? "Lỗi cập nhật"); return; }
+    if (!res.ok || json.error) { toast.error(json.error ?? "Lỗi cập nhật"); return; }
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status } : o));
     if (detailOrder?.id === id) setDetailOrder((o) => o ? { ...o, status } : o);
+    toast.success("Cập nhật trạng thái");
   }
 
   // Payment status is local-only until DB schema is extended with payment columns
@@ -308,10 +311,11 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
     try {
       const res = await fetch(`/api/orders?id=${id}`, { method: "DELETE" });
       const json = await res.json();
-      if (!res.ok || json.error) { alert(json.error ?? "Lỗi xoá"); return; }
+      if (!res.ok || json.error) { toast.error(json.error ?? "Lỗi xoá"); return; }
       setDeleteId(null);
+      toast.success("Đã xoá đơn hàng");
       router.refresh();
-    } catch { alert("Lỗi kết nối"); }
+    } catch { toast.error("Lỗi kết nối"); }
     finally { setSaving(false); }
   }
 
@@ -619,13 +623,20 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
 
               {formError && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">⚠️ {formError}</div>}
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-3 rounded-xl hover:bg-gray-50 transition"
-                  disabled={saving}>Huỷ</button>
-                <button type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 rounded-xl transition"
-                  disabled={saving}>{saving ? "Đang lưu..." : "Tạo đơn"}</button>
+              {/* Sticky footer: total summary + actions */}
+              <div className="sticky bottom-0 -mx-4 -mb-4 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur border-t border-gray-200 z-10 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Tổng cộng</span>
+                  <span className="font-bold text-blue-700 text-base">{money(totalCalc)}</span>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setShowModal(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-3 rounded-xl hover:bg-gray-50 transition"
+                    disabled={saving}>Huỷ</button>
+                  <button type="submit"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 rounded-xl transition"
+                    disabled={saving}>{saving ? "Đang lưu..." : "Tạo đơn"}</button>
+                </div>
               </div>
             </form>
           </div>
@@ -687,106 +698,117 @@ export function OrdersClient({ initialOrders, products, initialCustomers = [] }:
         </div>
       )}
 
-      {/* ── Modal chi tiết đơn ────────────────────────────────────── */}
-      {detailOrder && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
-              <div>
-                <h2 className="text-base font-bold text-gray-800">{detailOrder.order_code}</h2>
-                <p className="text-xs text-gray-400">{formatDateTimeVN(detailOrder.created_at)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={`/print/order/${detailOrder.id}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
-                  title="Mở hoá đơn để in"
-                >
-                  🖨 In
-                </a>
-                <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-2xl p-1">×</button>
-              </div>
-            </div>
-            <div className="p-4 space-y-4 text-sm">
-              {/* Customer info */}
-              <div className="bg-gray-50 rounded-xl p-3 grid grid-cols-2 gap-2">
-                <div><span className="text-gray-400 text-xs">Khách hàng</span><p className="font-semibold">{detailOrder.customer_name}</p></div>
-                <div><span className="text-gray-400 text-xs">SĐT</span><p>{detailOrder.customer_phone || "—"}</p></div>
-              </div>
-
-              {/* Status row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Trạng thái đơn</p>
-                  <select
-                    className={`w-full text-sm px-3 py-2 rounded-xl border-0 font-semibold cursor-pointer ${ORDER_STATUS_COLOR[detailOrder.status] ?? "bg-gray-100"}`}
-                    value={detailOrder.status}
-                    onChange={(e) => handleStatusChange(detailOrder.id, e.target.value)}
-                  >
-                    {Object.entries(ORDER_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Thanh toán</p>
-                  <select
-                    className={`w-full text-sm px-3 py-2 rounded-xl border-0 font-semibold cursor-pointer ${PAYMENT_STATUS_COLOR[detailOrder.payment_status] ?? "bg-gray-100"}`}
-                    value={detailOrder.payment_status}
-                    onChange={(e) => handlePaymentStatusChange(detailOrder.id, e.target.value)}
-                  >
-                    {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Phương thức TT */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-400">Phương thức TT:</span>
-                <span className="font-medium">{PAYMENT_METHOD_LABEL[detailOrder.payment_method] ?? detailOrder.payment_method}</span>
-              </div>
-
-              {detailOrder.note && (
-                <div className="bg-amber-50 rounded-xl p-3 text-sm text-gray-700">
-                  📝 {detailOrder.note}
-                </div>
-              )}
-
-              {/* Items table */}
-              {detailOrder.order_items && detailOrder.order_items.length > 0 && (
-                <div className="border rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium text-gray-600">Sản phẩm</th>
-                        <th className="text-center px-3 py-2 font-medium text-gray-600">SL</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-600">Đơn giá</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-600">T.tiền</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailOrder.order_items.map((it) => (
-                        <tr key={it.id} className="border-t">
-                          <td className="px-3 py-2">{it.product_name}</td>
-                          <td className="px-3 py-2 text-center">{it.qty} {it.unit}</td>
-                          <td className="px-3 py-2 text-right">{money(it.unit_price)}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{money(it.subtotal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t">
-                      <tr>
-                        <td colSpan={3} className="px-3 py-2 font-bold text-right">Tổng cộng</td>
-                        <td className="px-3 py-2 text-right font-bold text-blue-700">{money(detailOrder.total_amount)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
+      {/* ── Sheet chi tiết đơn ──────────────────────────────────────── */}
+      <Sheet
+        open={!!detailOrder}
+        onClose={() => setDetailOrder(null)}
+        title={detailOrder && (
+          <div>
+            <h2 className="text-base font-bold text-gray-800">{detailOrder.order_code}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{formatDateTimeVN(detailOrder.created_at)}</p>
           </div>
-        </div>
-      )}
+        )}
+        footer={detailOrder && (
+          <div className="flex gap-2">
+            <a
+              href={`/print/order/${detailOrder.id}`}
+              target="_blank"
+              rel="noopener"
+              className="flex-1 text-center text-sm font-semibold px-3 py-3 rounded-xl border border-blue-200 text-blue-700 hover:bg-blue-50 active:scale-95 transition-all"
+            >
+              🖨 In hoá đơn
+            </a>
+            <button
+              onClick={() => setDetailOrder(null)}
+              className="flex-1 text-sm font-semibold px-3 py-3 rounded-xl bg-gray-900 text-white hover:bg-gray-700 active:scale-95 transition-all"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
+      >
+        {detailOrder && (
+          <div className="p-4 space-y-4 text-sm">
+            {/* Customer info */}
+            <div className="bg-gray-50 rounded-2xl p-3 grid grid-cols-2 gap-2">
+              <div><span className="text-gray-400 text-xs">Khách hàng</span><p className="font-semibold">{detailOrder.customer_name}</p></div>
+              <div><span className="text-gray-400 text-xs">SĐT</span>
+                {detailOrder.customer_phone
+                  ? <a href={`tel:${detailOrder.customer_phone}`} className="block font-semibold text-blue-700">{detailOrder.customer_phone}</a>
+                  : <p>—</p>}
+              </div>
+            </div>
+
+            {/* Status row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Trạng thái đơn</p>
+                <select
+                  className={`w-full text-sm px-3 py-2.5 rounded-xl border-0 font-semibold cursor-pointer ${ORDER_STATUS_COLOR[detailOrder.status] ?? "bg-gray-100"}`}
+                  value={detailOrder.status}
+                  onChange={(e) => handleStatusChange(detailOrder.id, e.target.value)}
+                >
+                  {Object.entries(ORDER_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Thanh toán</p>
+                <select
+                  className={`w-full text-sm px-3 py-2.5 rounded-xl border-0 font-semibold cursor-pointer ${PAYMENT_STATUS_COLOR[detailOrder.payment_status] ?? "bg-gray-100"}`}
+                  value={detailOrder.payment_status}
+                  onChange={(e) => handlePaymentStatusChange(detailOrder.id, e.target.value)}
+                >
+                  {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Phương thức TT */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-400">Phương thức TT:</span>
+              <span className="font-medium">{PAYMENT_METHOD_LABEL[detailOrder.payment_method] ?? detailOrder.payment_method}</span>
+            </div>
+
+            {detailOrder.note && (
+              <div className="bg-amber-50 rounded-2xl p-3 text-sm text-gray-700">
+                📝 {detailOrder.note}
+              </div>
+            )}
+
+            {/* Items table */}
+            {detailOrder.order_items && detailOrder.order_items.length > 0 && (
+              <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Sản phẩm</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600">SL</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600">Đơn giá</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600">T.tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailOrder.order_items.map((it) => (
+                      <tr key={it.id} className="border-t border-gray-100">
+                        <td className="px-3 py-2">{it.product_name}</td>
+                        <td className="px-3 py-2 text-center">{it.qty} {it.unit}</td>
+                        <td className="px-3 py-2 text-right">{money(it.unit_price)}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{money(it.subtotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50 border-t border-gray-200">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 font-bold text-right">Tổng cộng</td>
+                      <td className="px-3 py-2 text-right font-bold text-blue-700">{money(detailOrder.total_amount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }

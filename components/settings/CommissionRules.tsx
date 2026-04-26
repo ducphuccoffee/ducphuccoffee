@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/components/ui/Toast";
 
 type Rule = {
   id: string;
@@ -89,7 +90,7 @@ export function CommissionRules() {
       setNewType(""); setNewFixed(0); setNewRate(0);
       await load();
     } catch (e: any) {
-      alert(e.message ?? "Lỗi");
+      toast.error(e.message ?? "Lỗi");
     } finally {
       setAdding(false);
     }

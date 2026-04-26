@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/components/ui/Toast";
 
 type Role =
   | "admin"
@@ -113,7 +114,7 @@ export function UsersAdmin({ currentUserId }: { currentUserId: string }) {
       });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Lỗi đổi mật khẩu");
-      window.alert("Đã đổi mật khẩu");
+      toast.success("Đã đổi mật khẩu");
     } catch (e: any) {
       setError(e.message ?? "Lỗi");
     } finally {

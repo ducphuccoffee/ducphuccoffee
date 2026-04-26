@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { StickyTopbar } from "@/components/StickyTopbar";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerSupabaseClient();
@@ -17,12 +18,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AppShell
-      topbar={<StickyTopbar displayName={displayName} initials={initials} />}
-      displayName={displayName}
-      initials={initials}
-    >
-      {children}
-    </AppShell>
+    <ToastProvider>
+      <AppShell
+        topbar={<StickyTopbar displayName={displayName} initials={initials} />}
+        displayName={displayName}
+        initials={initials}
+      >
+        {children}
+      </AppShell>
+    </ToastProvider>
   );
 }
