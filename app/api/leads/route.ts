@@ -74,6 +74,10 @@ export async function PATCH(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
 
+  const { data: member } = await supabase
+    .from("org_members").select("org_id").eq("user_id", user.id).eq("is_active", true).limit(1).maybeSingle();
+  if (!member?.org_id) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
@@ -86,8 +90,12 @@ export async function PATCH(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from("leads").update(patch).eq("id", id).select().single();
+    .from("leads").update(patch)
+    .eq("id", id)
+    .eq("org_id", member.org_id)
+    .select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!data) return NextResponse.json({ error: "Không tìm thấy lead" }, { status: 404 });
 
   // If converted, auto-create customer
   if (body.status === "converted" && !data.converted_customer_id) {

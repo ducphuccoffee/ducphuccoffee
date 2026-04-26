@@ -7,6 +7,7 @@ import {
   MapPin, AlertTriangle, CheckCircle, Clock,
   Users, Target, TrendingDown, Plus, ArrowRight, RefreshCw, MessageSquare,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type PlannedVisit = {
   id: string;
@@ -71,6 +72,8 @@ export function SalesTodayClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [showPlan, setShowPlan] = useState(false);
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -102,8 +105,8 @@ export function SalesTodayClient() {
     load();
   }
 
-  async function cancelPlannedVisit(id: string) {
-    if (!confirm("Huỷ kế hoạch ghé thăm này?")) return;
+  async function doCancelPlannedVisit(id: string) {
+    setCancelling(true);
     setBusyId(id);
     // Mark as 'lost' to remove from planned list without losing the record.
     await fetch(`/api/sfa-visits?id=${id}`, {
@@ -112,6 +115,8 @@ export function SalesTodayClient() {
       body: JSON.stringify({ result: "lost", note: "(huỷ kế hoạch)" }),
     });
     setBusyId(null);
+    setCancelling(false);
+    setCancelId(null);
     load();
   }
 
@@ -175,13 +180,13 @@ export function SalesTodayClient() {
           {data.visits.planned_overdue.map(v => (
             <VisitPlanRow key={v.id} visit={v} busy={busyId === v.id} overdue
               onPostpone={() => postponePlannedVisit(v.id)}
-              onCancel={() => cancelPlannedVisit(v.id)} />
+              onCancel={() => setCancelId(v.id)} />
           ))}
           {data.visits.planned_today.length > 0 && <GroupLabel label={`Kế hoạch hôm nay (${data.visits.planned_today.length})`} color="orange" />}
           {data.visits.planned_today.map(v => (
             <VisitPlanRow key={v.id} visit={v} busy={busyId === v.id}
               onPostpone={() => postponePlannedVisit(v.id)}
-              onCancel={() => cancelPlannedVisit(v.id)} />
+              onCancel={() => setCancelId(v.id)} />
           ))}
           {data.visits.done_today.length > 0 && (
             <>
@@ -329,6 +334,17 @@ export function SalesTodayClient() {
           onCreated={() => { setShowPlan(false); load(); }}
         />
       )}
+
+      <ConfirmDialog
+        open={cancelId !== null}
+        onClose={() => { if (!cancelling) setCancelId(null); }}
+        onConfirm={() => { if (cancelId) return doCancelPlannedVisit(cancelId); }}
+        title="Huỷ kế hoạch ghé thăm?"
+        description="Kế hoạch sẽ được đánh dấu là đã huỷ và biến mất khỏi danh sách hôm nay."
+        confirmLabel="Huỷ kế hoạch"
+        loading={cancelling}
+        destructive
+      />
     </div>
   );
 }

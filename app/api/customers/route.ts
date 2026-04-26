@@ -4,9 +4,24 @@ import { createRouteSupabase } from "@/lib/supabase/route";
 export async function GET(request: Request) {
   const response = NextResponse.json({});
   const supabase = createRouteSupabase(request, response);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+
+  const { data: member } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (!member?.org_id)
+    return NextResponse.json({ error: "User không thuộc tổ chức nào" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("customers")
     .select("id, name, phone, address")
+    .eq("org_id", member.org_id)
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ data });
@@ -67,6 +82,20 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const response = NextResponse.json({});
   const supabase = createRouteSupabase(request, response);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+
+  const { data: member } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (!member?.org_id)
+    return NextResponse.json({ error: "User không thuộc tổ chức nào" }, { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
@@ -87,20 +116,40 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Không có field hợp lệ" }, { status: 400 });
 
   const { data, error } = await supabase
-    .from("customers").update(patch).eq("id", id)
+    .from("customers").update(patch)
+    .eq("id", id)
+    .eq("org_id", member.org_id)
     .select("id, name, phone, address, assigned_user_id, next_follow_up_at, crm_status, latitude, longitude")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!data) return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
   return NextResponse.json({ data });
 }
 
 export async function DELETE(request: Request) {
   const response = NextResponse.json({});
   const supabase = createRouteSupabase(request, response);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+
+  const { data: member } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (!member?.org_id)
+    return NextResponse.json({ error: "User không thuộc tổ chức nào" }, { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 });
-  const { error } = await supabase.from("customers").delete().eq("id", id);
+  const { error } = await supabase
+    .from("customers").delete()
+    .eq("id", id)
+    .eq("org_id", member.org_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ success: true });
 }

@@ -12,14 +12,52 @@ function svc() {
   );
 }
 
+async function getOrgId(supabase: any, userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  return data?.org_id ?? null;
+}
+
+async function customerInOrg(customerId: string, orgId: string): Promise<boolean> {
+  const { data } = await svc()
+    .from("customers")
+    .select("id")
+    .eq("id", customerId)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function GET(request: Request) {
   const res = NextResponse.json({});
   const supabase = createRouteSupabase(request, res);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get("customer_id");
+
+  // Restrict by customer ids that belong to the user's org
+  const { data: orgCustomers } = await svc()
+    .from("customers")
+    .select("id")
+    .eq("org_id", orgId);
+  const orgCustomerIds = (orgCustomers ?? []).map((c: any) => c.id);
+
+  if (orgCustomerIds.length === 0) return NextResponse.json({ data: [] });
+
+  if (customerId) {
+    if (!orgCustomerIds.includes(customerId))
+      return NextResponse.json({ error: "Không có quyền truy cập khách hàng này" }, { status: 403 });
+  }
 
   let q = svc()
     .from("sales_visits")
@@ -28,6 +66,7 @@ export async function GET(request: Request) {
     .limit(200);
 
   if (customerId) q = q.eq("customer_id", customerId);
+  else q = q.in("customer_id", orgCustomerIds);
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -40,10 +79,16 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) return NextResponse.json({ error: "Không có tổ chức" }, { status: 403 });
+
   const body = await request.json();
   const { customer_id, check_in_lat, check_in_lng, note, status } = body;
 
   if (!customer_id) return NextResponse.json({ error: "customer_id required" }, { status: 400 });
+
+  if (!(await customerInOrg(customer_id, orgId)))
+    return NextResponse.json({ error: "Không có quyền truy cập khách hàng này" }, { status: 403 });
 
   const VALID_STATUSES = ["visited", "no_answer", "follow_up"];
   const resolvedStatus = VALID_STATUSES.includes(status) ? status : "visited";
