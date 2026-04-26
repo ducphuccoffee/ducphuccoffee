@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
+import { Sheet } from "@/components/ui/Sheet";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
@@ -255,14 +257,33 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
         </table>
       </div>
 
-      {/* Modal tạo sản phẩm */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-800">Thêm sản phẩm mới</h2>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+      {/* Sheet tạo sản phẩm */}
+      <Sheet
+        open={showModal}
+        onClose={() => !saving && setShowModal(false)}
+        title={<h2 className="text-base font-bold text-gray-800">Thêm sản phẩm mới</h2>}
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-3 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+              disabled={saving}
+            >
+              Huỷ
+            </button>
+            <button
+              type="submit"
+              form="product-form"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 rounded-xl transition disabled:opacity-50"
+              disabled={saving}
+            >
+              {saving ? "Đang lưu..." : "Tạo sản phẩm"}
+            </button>
+          </div>
+        }
+      >
+        <form id="product-form" onSubmit={handleSubmit} className="p-5 space-y-4">
               {/* Tên */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tên sản phẩm *</label>
@@ -454,54 +475,20 @@ export function ProductsClient({ initialProducts, greenTypes, error }: Props) {
                   ⚠️ {formError}
                 </div>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
-                  disabled={saving}
-                >
-                  Huỷ
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition"
-                  disabled={saving}
-                >
-                  {saving ? "Đang lưu..." : "Tạo sản phẩm"}
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Sheet>
 
-      {/* Modal xác nhận xoá */}
-      {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Xoá sản phẩm?</h3>
-            <p className="text-sm text-gray-500 mb-5">Hành động này không thể hoàn tác.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition"
-                disabled={saving}
-              >
-                Huỷ
-              </button>
-              <button
-                onClick={() => handleDelete(deleteId)}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 rounded-lg transition"
-                disabled={saving}
-              >
-                {saving ? "Đang xoá..." : "Xoá"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Xác nhận xoá */}
+      <ConfirmDialog
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => { if (deleteId) return handleDelete(deleteId); }}
+        title="Xoá sản phẩm?"
+        description="Hành động này không thể hoàn tác."
+        confirmLabel="Xoá"
+        loading={saving}
+        destructive
+      />
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
+import { Sheet } from "@/components/ui/Sheet";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const money = (n: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(n) || 0);
@@ -175,68 +177,61 @@ export function CustomersClient({ initialCustomers }: Props) {
         </table>
       </div>
 
-      {/* Modal create/edit */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-5 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-800">
-                {editTarget ? "Cập nhật khách hàng" : "Thêm khách hàng mới"}
-              </h2>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên khách *</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nguyễn Văn A" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0901 234 567" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-                <textarea rows={2} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="123 Nguyễn Huệ, Q.1, TP.HCM" value={address} onChange={(e) => setAddress(e.target.value)} />
-              </div>
-              {formError && (
-                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">⚠️ {formError}</div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowModal(false)} disabled={saving}
-                  className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50 transition">
-                  Hủy
-                </button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition">
-                  {saving ? "Đang lưu..." : editTarget ? "Cập nhật" : "Thêm khách"}
-                </button>
-              </div>
-            </form>
+      {/* Sheet create/edit */}
+      <Sheet
+        open={showModal}
+        onClose={() => !saving && setShowModal(false)}
+        title={
+          <h2 className="text-base font-bold text-gray-800">
+            {editTarget ? "Cập nhật khách hàng" : "Thêm khách hàng mới"}
+          </h2>
+        }
+        footer={
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setShowModal(false)} disabled={saving}
+              className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-3 rounded-xl hover:bg-gray-50 transition disabled:opacity-50">
+              Hủy
+            </button>
+            <button type="submit" form="customer-form" disabled={saving}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 rounded-xl transition disabled:opacity-50">
+              {saving ? "Đang lưu..." : editTarget ? "Cập nhật" : "Thêm khách"}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="customer-form" onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tên khách *</label>
+            <input className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Nguyễn Văn A" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+            <input className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0901 234 567" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
+            <textarea rows={2} className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="123 Nguyễn Huệ, Q.1, TP.HCM" value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
+          {formError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">⚠️ {formError}</div>
+          )}
+        </form>
+      </Sheet>
 
       {/* Confirm delete */}
-      {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Xóa khách hàng?</h3>
-            <p className="text-sm text-gray-500 mb-5">Hành động này không thể hoàn tác.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} disabled={saving}
-                className="flex-1 border border-gray-300 text-gray-700 text-sm font-medium py-2 rounded-lg hover:bg-gray-50">
-                Hủy
-              </button>
-              <button onClick={() => handleDelete(deleteId)} disabled={saving}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 rounded-lg">
-                {saving ? "Đang xóa..." : "Xóa"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => { if (deleteId) return handleDelete(deleteId); }}
+        title="Xóa khách hàng?"
+        description="Hành động này không thể hoàn tác."
+        confirmLabel="Xóa"
+        loading={saving}
+        destructive
+      />
     </div>
   );
 }
